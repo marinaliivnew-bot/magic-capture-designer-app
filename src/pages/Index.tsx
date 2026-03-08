@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getProjects, deleteProject } from "@/lib/api";
-import { ROOM_TYPES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, FolderOpen } from "lucide-react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -37,77 +36,70 @@ const Index = () => {
     }
   };
 
-  const getRoomLabel = (type: string) =>
-    ROOM_TYPES.find((r) => r.value === type)?.label || type;
-
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl sm:text-4xl font-display text-foreground mb-2">
+      {/* Header */}
+      <header className="border-b border-border bg-background">
+        <div className="mx-auto max-w-content px-12 py-4 flex items-center justify-between">
+          <span className="font-display text-xl">Brief → Concept</span>
+          <nav className="label-style text-muted-foreground">
+            Интерьерный бриф
+          </nav>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-content px-12 py-16">
+        <div className="mb-16 text-center">
+          <h1 className="text-foreground mb-4">
             Brief → Concept
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground font-light">
             Превращайте хаотичные заметки в структурированные брифы
           </p>
         </div>
 
-        {/* New project button */}
         <Button
           onClick={() => navigate("/new")}
-          className="mb-8 w-full h-12 text-base"
+          className="mb-16 w-full"
           size="lg"
         >
-          <Plus className="mr-2 h-5 w-5" />
+          <Plus className="mr-2 h-4 w-4" />
           Новый проект
         </Button>
 
-        {/* Projects list */}
         {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="flex justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : projects.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card p-12 text-center">
-            <FolderOpen className="mx-auto h-12 w-12 text-muted-foreground" />
-            <h3 className="mt-4 font-display text-xl text-foreground">
-              Нет проектов
-            </h3>
-            <p className="mt-2 text-muted-foreground">
-              Создайте первый проект, чтобы начать
+          <div className="py-16 text-center">
+            <p className="font-display text-xl italic text-muted-foreground">
+              Пока нет проектов
             </p>
+            <Button variant="ghost" className="mt-6" onClick={() => navigate("/new")}>
+              Создать первый
+            </Button>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-border">
             {projects.map((p) => (
               <div
                 key={p.id}
-                className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-shadow hover:shadow-[var(--shadow-card)] cursor-pointer"
+                className="group flex items-center gap-6 py-6 cursor-pointer transition-colors duration-350 hover:text-primary"
                 onClick={() => navigate(`/project/${p.id}/brief`)}
               >
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-foreground truncate">
+                  <h3 className="font-display text-foreground group-hover:text-primary transition-colors duration-350">
                     {p.name}
                   </h3>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    {p.room_type && <span>{getRoomLabel(p.room_type)}</span>}
-                    {p.dimensions_text && (
-                      <>
-                        <span>·</span>
-                        <span>{p.dimensions_text}</span>
-                      </>
-                    )}
-                    <span>·</span>
-                    <span>
-                      {new Date(p.created_at).toLocaleDateString("ru-RU")}
-                    </span>
-                  </div>
+                  <p className="caption-style mt-1">
+                    {new Date(p.created_at).toLocaleDateString("ru-RU")}
+                  </p>
                 </div>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity duration-350 text-destructive border-destructive"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDelete(p.id, p.name);

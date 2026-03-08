@@ -74,52 +74,46 @@ const BriefPage = () => {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-3xl px-4 py-8">
-        {/* Header */}
-        <div className="mb-6 flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
+      {/* Header */}
+      <header className="border-b border-border bg-background">
+        <div className="mx-auto max-w-content px-12 py-4 flex items-center gap-4">
+          <button
             onClick={() => navigate("/")}
+            className="text-muted-foreground hover:text-foreground transition-colors duration-350"
           >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl sm:text-3xl font-display text-foreground">
-              {project?.name || "Бриф"}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Редактируйте секции брифа
-            </p>
-          </div>
+            <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
+          </button>
+          <span className="font-display text-xl flex-1">{project?.name || "Бриф"}</span>
         </div>
+      </header>
 
+      <div className="mx-auto max-w-content px-12 py-16">
         {/* Completeness */}
-        <div className="mb-8 rounded-lg border border-border bg-card p-4">
-          <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="font-medium text-foreground">Заполненность брифа</span>
-            <span className="font-semibold text-primary">{completeness}%</span>
+        <div className="mb-16">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="label-style text-muted-foreground">Заполненность</span>
+            <span className="label-style text-primary">{completeness}%</span>
           </div>
-          <Progress value={completeness} className="h-2" />
+          <Progress value={completeness} />
         </div>
 
         {/* Brief sections */}
-        <div className="space-y-6">
+        <div className="divide-y divide-border">
           {BRIEF_SECTIONS.map(({ key, label, description }) => (
-            <div key={key} className="space-y-2">
-              <label className="block text-sm font-semibold text-foreground">
+            <div key={key} className="py-8">
+              <label className="label-style text-foreground block mb-1">
                 {label}
               </label>
-              <p className="text-xs text-muted-foreground">{description}</p>
+              <p className="caption-style mb-4">{description}</p>
               <Textarea
-                placeholder={`Заполните: ${label.toLowerCase()}...`}
+                placeholder={`${label.toLowerCase()}...`}
                 value={brief[key] || ""}
                 onChange={(e) =>
                   setBrief((prev) => ({ ...prev, [key]: e.target.value }))
@@ -131,14 +125,14 @@ const BriefPage = () => {
         </div>
 
         {/* Actions */}
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-16 border-t border-border pt-8 flex flex-col gap-4 sm:flex-row">
           <Button onClick={handleSave} disabled={saving} className="flex-1">
             {saving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <Save className="mr-2 h-4 w-4" />
             )}
-            Сохранить бриф
+            Сохранить
           </Button>
           <Button
             variant="outline"
@@ -163,7 +157,7 @@ const BriefPage = () => {
                 const descNote = project?.rooms_description ? `\nОписание помещений текстом: ${project.rooms_description}` : "";
                 const context = `Помещения:\n${roomsContext}${descNote}${planNote}\nЗаметки: ${project?.raw_input || "нет"}`;
                 await analyzeBrief(projectId, briefText, context);
-                toast.success("Анализ завершён!");
+                toast.success("Анализ завершён");
                 navigate(`/project/${projectId}/questions`);
               } catch (e: any) {
                 toast.error(e.message || "Ошибка AI-анализа");
@@ -179,7 +173,7 @@ const BriefPage = () => {
             ) : (
               <Sparkles className="mr-2 h-4 w-4" />
             )}
-            {analyzing ? "Анализирую…" : "AI-анализ брифа"}
+            {analyzing ? "Анализирую…" : "AI-анализ"}
           </Button>
           <Button
             variant="outline"

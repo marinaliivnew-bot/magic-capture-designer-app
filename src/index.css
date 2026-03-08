@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Serif+Display&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,96 +6,61 @@
 
 @layer base {
   :root {
-    --font-display: 'DM Serif Display', serif;
-    --font-body: 'DM Sans', sans-serif;
+    --font-display: 'Cormorant Garamond', serif;
+    --font-body: 'Jost', sans-serif;
 
-    --background: 30 25% 97%;
-    --foreground: 25 20% 12%;
+    /* #F2EDE8 → hsl(30, 18%, 93%) */
+    --background: 30 18% 93%;
+    /* #1C1917 → hsl(20, 14%, 10%) */
+    --foreground: 20 14% 10%;
 
-    --card: 30 20% 95%;
-    --card-foreground: 25 20% 12%;
+    /* #FDFAF7 → hsl(30, 50%, 97%) */
+    --card: 30 50% 97%;
+    --card-foreground: 20 14% 10%;
 
-    --popover: 30 25% 97%;
-    --popover-foreground: 25 20% 12%;
+    --popover: 30 50% 97%;
+    --popover-foreground: 20 14% 10%;
 
-    --primary: 16 60% 48%;
-    --primary-foreground: 30 25% 97%;
+    /* #A07850 → hsl(27, 33%, 47%) */
+    --primary: 27 33% 47%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 30 15% 90%;
-    --secondary-foreground: 25 20% 20%;
+    /* secondary = transparent w/ border */
+    --secondary: 30 18% 93%;
+    --secondary-foreground: 20 14% 10%;
 
-    --muted: 30 12% 92%;
-    --muted-foreground: 25 10% 46%;
+    /* #F2EDE8 muted */
+    --muted: 30 18% 93%;
+    /* #78716C → hsl(25, 5%, 45%) */
+    --muted-foreground: 25 5% 45%;
 
-    --accent: 30 20% 88%;
-    --accent-foreground: 25 20% 15%;
+    --accent: 30 18% 93%;
+    --accent-foreground: 20 14% 10%;
 
-    --destructive: 0 72% 51%;
+    /* #C0392B → hsl(4, 64%, 46%) */
+    --destructive: 4 64% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 15% 88%;
-    --input: 30 15% 85%;
-    --ring: 16 60% 48%;
+    /* #E2DAD3 → hsl(25, 18%, 86%) */
+    --border: 25 18% 86%;
+    --input: 25 18% 86%;
+    --ring: 27 33% 47%;
 
-    --radius: 0.625rem;
+    --radius: 0px;
 
-    --sidebar-background: 30 20% 95%;
-    --sidebar-foreground: 25 20% 20%;
-    --sidebar-primary: 16 60% 48%;
-    --sidebar-primary-foreground: 30 25% 97%;
-    --sidebar-accent: 30 15% 90%;
-    --sidebar-accent-foreground: 25 20% 15%;
-    --sidebar-border: 30 15% 88%;
-    --sidebar-ring: 16 60% 48%;
+    --sidebar-background: 30 18% 93%;
+    --sidebar-foreground: 20 14% 10%;
+    --sidebar-primary: 27 33% 47%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 30 18% 93%;
+    --sidebar-accent-foreground: 20 14% 10%;
+    --sidebar-border: 25 18% 86%;
+    --sidebar-ring: 27 33% 47%;
 
-    /* Custom tokens */
-    --success: 152 50% 40%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 25 20% 12%;
-    --info: 210 60% 50%;
-    --info-foreground: 0 0% 100%;
-
-    --priority-critical: 0 72% 51%;
-    --priority-important: 38 92% 50%;
-    --priority-optional: 210 60% 50%;
-
-    --gradient-warm: linear-gradient(135deg, hsl(16 60% 48%), hsl(30 50% 55%));
-    --gradient-surface: linear-gradient(180deg, hsl(30 25% 97%), hsl(30 20% 94%));
-
-    --shadow-soft: 0 2px 8px -2px hsl(25 20% 12% / 0.06);
-    --shadow-card: 0 4px 16px -4px hsl(25 20% 12% / 0.08);
-    --shadow-elevated: 0 8px 32px -8px hsl(25 20% 12% / 0.12);
-  }
-
-  .dark {
-    --background: 25 15% 8%;
-    --foreground: 30 15% 90%;
-    --card: 25 15% 11%;
-    --card-foreground: 30 15% 90%;
-    --popover: 25 15% 11%;
-    --popover-foreground: 30 15% 90%;
-    --primary: 16 60% 55%;
-    --primary-foreground: 25 15% 8%;
-    --secondary: 25 12% 16%;
-    --secondary-foreground: 30 15% 85%;
-    --muted: 25 10% 18%;
-    --muted-foreground: 30 8% 55%;
-    --accent: 25 12% 18%;
-    --accent-foreground: 30 15% 90%;
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 30 15% 90%;
-    --border: 25 10% 18%;
-    --input: 25 10% 18%;
-    --ring: 16 60% 55%;
-    --sidebar-background: 25 15% 10%;
-    --sidebar-foreground: 30 15% 85%;
-    --sidebar-primary: 16 60% 55%;
-    --sidebar-primary-foreground: 25 15% 8%;
-    --sidebar-accent: 25 12% 16%;
-    --sidebar-accent-foreground: 30 15% 90%;
-    --sidebar-border: 25 10% 18%;
-    --sidebar-ring: 16 60% 55%;
+    /* Priority tokens — editorial approach */
+    --priority-critical: 4 64% 46%;
+    --priority-important: 27 33% 47%;
+    --priority-optional: 25 18% 86%;
   }
 }
 
@@ -107,10 +72,34 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-body);
+    font-weight: 300;
+    font-size: 15px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  h1, h2, h3 {
+  h1 {
     font-family: var(--font-display);
+    font-weight: 300;
+    font-size: 48px;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 32px;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 22px;
+    line-height: 1.3;
   }
 }
 
@@ -121,4 +110,29 @@
   .font-body {
     font-family: var(--font-body);
   }
+  .label-style {
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .caption-style {
+    font-size: 12px;
+    font-weight: 300;
+    color: hsl(var(--muted-foreground));
+  }
+}
+
+/* Toast overrides */
+[data-sonner-toaster] [data-sonner-toast] {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--card)) !important;
+}
+
+/* Print styles */
+@media print {
+  body { background: white; }
 }
