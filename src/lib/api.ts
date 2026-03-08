@@ -246,6 +246,9 @@ export async function analyzeBrief(projectId: string, briefText: string, project
 
 // Board generation
 export async function generateBoard(projectId: string, briefText: string, projectContext?: string) {
+  const brief = await getBrief(projectId);
+  const userRefs = (brief as any)?.user_refs || [];
+
   const resp = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-board`,
     {
@@ -254,7 +257,7 @@ export async function generateBoard(projectId: string, briefText: string, projec
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({ briefText, projectContext }),
+      body: JSON.stringify({ briefText, projectContext, userRefs }),
     }
   );
   if (!resp.ok) {
