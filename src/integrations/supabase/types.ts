@@ -194,8 +194,10 @@ export type Database = {
           dimensions_text: string | null
           id: string
           name: string
+          plan_url: string | null
           raw_input: string | null
           room_type: string | null
+          rooms_description: string | null
           session_id: string
         }
         Insert: {
@@ -204,8 +206,10 @@ export type Database = {
           dimensions_text?: string | null
           id?: string
           name: string
+          plan_url?: string | null
           raw_input?: string | null
           room_type?: string | null
+          rooms_description?: string | null
           session_id: string
         }
         Update: {
@@ -214,8 +218,10 @@ export type Database = {
           dimensions_text?: string | null
           id?: string
           name?: string
+          plan_url?: string | null
           raw_input?: string | null
           room_type?: string | null
+          rooms_description?: string | null
           session_id?: string
         }
         Relationships: []

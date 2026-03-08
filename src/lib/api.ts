@@ -5,6 +5,8 @@ import { getSessionId } from "./session";
 export async function createProject(data: {
   name: string;
   raw_input?: string;
+  rooms_description?: string;
+  plan_url?: string;
   constraints?: Record<string, string>;
 }) {
   const { data: project, error } = await supabase
@@ -13,6 +15,8 @@ export async function createProject(data: {
       session_id: getSessionId(),
       name: data.name,
       raw_input: data.raw_input || null,
+      rooms_description: data.rooms_description || null,
+      plan_url: data.plan_url || null,
       constraints: data.constraints || {},
     })
     .select()

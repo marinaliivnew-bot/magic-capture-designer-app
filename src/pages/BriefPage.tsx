@@ -156,11 +156,12 @@ const BriefPage = () => {
                       const typeLabel = ROOM_TYPES.find(t => t.value === r.room_type)?.label || r.room_type;
                       let line = `- ${r.name} (${typeLabel})`;
                       if (r.dimensions_text) line += `, размеры: ${r.dimensions_text}`;
-                      if (r.plan_url) line += `\n  К помещению прикреплён план: ${r.plan_url}`;
                       return line;
                     }).join("\n")
                   : "Не указаны";
-                const context = `Помещения:\n${roomsContext}\nЗаметки: ${project?.raw_input || "нет"}`;
+                const planNote = project?.plan_url ? `\nК проекту прикреплён план: ${project.plan_url}` : "";
+                const descNote = project?.rooms_description ? `\nОписание помещений текстом: ${project.rooms_description}` : "";
+                const context = `Помещения:\n${roomsContext}${descNote}${planNote}\nЗаметки: ${project?.raw_input || "нет"}`;
                 await analyzeBrief(projectId, briefText, context);
                 toast.success("Анализ завершён!");
                 navigate(`/project/${projectId}/questions`);
