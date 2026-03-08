@@ -241,6 +241,19 @@ const QuestionsPage = () => {
             Назад к брифу
           </Button>
           <Button
+            variant="outline"
+            onClick={handleReanalyze}
+            disabled={reanalyzing}
+            className="flex-1"
+          >
+            {reanalyzing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RotateCcw className="mr-2 h-4 w-4" />
+            )}
+            {reanalyzing ? "Анализирую…" : "Пере-анализ"}
+          </Button>
+          <Button
             onClick={() => navigate(`/project/${projectId}/board`)}
             className="flex-1"
           >
