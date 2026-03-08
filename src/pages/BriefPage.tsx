@@ -128,11 +128,11 @@ const BriefPage = () => {
         </div>
 
         {/* User refs preview */}
-        {Array.isArray((brief as any).user_refs) && (brief as any).user_refs.length > 0 && (
+        {userRefs.length > 0 && (
           <div className="mt-16">
             <span className="label-style text-muted-foreground block mb-4">Загруженные референсы</span>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {((brief as any).user_refs as any[]).map((ref: any, idx: number) => (
+              {userRefs.map((ref: any, idx: number) => (
                 <div key={ref.url || idx} className="group relative overflow-hidden border border-border">
                   <div className="aspect-[4/3] w-full overflow-hidden bg-muted">
                     <img
