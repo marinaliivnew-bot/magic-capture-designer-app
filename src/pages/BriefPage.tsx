@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getBrief, getProject, upsertBrief, analyzeBrief } from "@/lib/api";
-import { BRIEF_SECTIONS } from "@/lib/constants";
+import { getRooms } from "@/lib/rooms";
+import { BRIEF_SECTIONS, ROOM_TYPES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
@@ -12,6 +13,7 @@ const BriefPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
+  const [rooms, setRooms] = useState<any[]>([]);
   const [brief, setBrief] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -21,11 +23,13 @@ const BriefPage = () => {
     if (!projectId) return;
     const load = async () => {
       try {
-        const [p, b] = await Promise.all([
+        const [p, b, r] = await Promise.all([
           getProject(projectId),
           getBrief(projectId),
+          getRooms(projectId),
         ]);
         setProject(p);
+        setRooms(r || []);
         if (b) {
           const fields: Record<string, string> = {};
           BRIEF_SECTIONS.forEach(({ key }) => {
@@ -147,9 +151,16 @@ const BriefPage = () => {
                 const briefText = BRIEF_SECTIONS.map(
                   ({ key, label }) => `### ${label}\n${brief[key] || "(пусто)"}`
                 ).join("\n\n");
-                const context = project
-                  ? `Тип: ${project.room_type || "?"}, Размеры: ${project.dimensions_text || "?"}, Заметки: ${project.raw_input || "нет"}`
-                  : "";
+                const roomsContext = rooms.length > 0
+                  ? rooms.map((r: any) => {
+                      const typeLabel = ROOM_TYPES.find(t => t.value === r.room_type)?.label || r.room_type;
+                      let line = `- ${r.name} (${typeLabel})`;
+                      if (r.dimensions_text) line += `, размеры: ${r.dimensions_text}`;
+                      if (r.plan_url) line += `\n  К помещению прикреплён план: ${r.plan_url}`;
+                      return line;
+                    }).join("\n")
+                  : "Не указаны";
+                const context = `Помещения:\n${roomsContext}\nЗаметки: ${project?.raw_input || "нет"}`;
                 await analyzeBrief(projectId, briefText, context);
                 toast.success("Анализ завершён!");
                 navigate(`/project/${projectId}/questions`);

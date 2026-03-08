@@ -1,28 +1,32 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createProject } from "@/lib/api";
-import { ROOM_TYPES } from "@/lib/constants";
+import { saveRooms, uploadPlanFile } from "@/lib/rooms";
+import RoomCard, { type RoomData } from "@/components/RoomCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Plus } from "lucide-react";
+
+function makeRoom(): RoomData {
+  return {
+    id: crypto.randomUUID(),
+    name: "",
+    room_type: "other",
+    dimensions_text: "",
+    plan_file: null,
+    plan_url: "",
+    plan_preview: "",
+  };
+}
 
 const NewProject = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     name: "",
-    room_type: "",
-    dimensions_text: "",
     raw_input: "",
     budget: "",
     timeline: "",
@@ -30,21 +34,37 @@ const NewProject = () => {
     must_haves: "",
     nice_to_haves: "",
   });
+  const [rooms, setRooms] = useState<RoomData[]>([makeRoom()]);
 
   const set = (key: string, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleRoomChange = (id: string, field: keyof RoomData, value: any) => {
+    setRooms((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
+    );
+  };
+
+  const addRoom = () => setRooms((prev) => [...prev, makeRoom()]);
+
+  const deleteRoom = (id: string) =>
+    setRooms((prev) => prev.filter((r) => r.id !== id));
 
   const handleGenerate = async () => {
     if (!form.name.trim()) {
       toast.error("Введите название проекта");
       return;
     }
+    if (rooms.some((r) => !r.name.trim())) {
+      toast.error("Укажите название для каждого помещения");
+      return;
+    }
+
     setLoading(true);
     try {
+      // Create project
       const project = await createProject({
         name: form.name,
-        room_type: form.room_type || undefined,
-        dimensions_text: form.dimensions_text || undefined,
         raw_input: form.raw_input || undefined,
         constraints: {
           budget: form.budget,
@@ -54,6 +74,25 @@ const NewProject = () => {
           nice_to_haves: form.nice_to_haves,
         },
       });
+
+      // Upload plan files and save rooms
+      const roomsToSave = await Promise.all(
+        rooms.map(async (room, i) => {
+          let planUrl = room.plan_url;
+          if (room.plan_file) {
+            planUrl = await uploadPlanFile(room.plan_file, project.id, i);
+          }
+          return {
+            name: room.name,
+            room_type: room.room_type,
+            dimensions_text: room.dimensions_text || undefined,
+            plan_url: planUrl || undefined,
+            sort_order: i,
+          };
+        })
+      );
+      await saveRooms(project.id, roomsToSave);
+
       toast.success("Проект создан!");
       navigate(`/project/${project.id}/brief`);
     } catch (e) {
@@ -72,7 +111,7 @@ const NewProject = () => {
             Новый проект
           </h1>
           <p className="text-muted-foreground">
-            Заполните данные о помещении и вставьте заметки
+            Заполните данные о помещениях и вставьте заметки
           </p>
         </div>
 
@@ -82,38 +121,34 @@ const NewProject = () => {
             <Label htmlFor="name">Название проекта *</Label>
             <Input
               id="name"
-              placeholder="Кухня-гостиная Ивановых"
+              placeholder="Квартира Ивановых, ул. Ленина 10"
               value={form.name}
               onChange={(e) => set("name", e.target.value)}
             />
           </div>
 
-          {/* Room type */}
-          <div className="space-y-2">
-            <Label>Тип помещения</Label>
-            <Select value={form.room_type} onValueChange={(v) => set("room_type", v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Выберите тип" />
-              </SelectTrigger>
-              <SelectContent>
-                {ROOM_TYPES.map((rt) => (
-                  <SelectItem key={rt.value} value={rt.value}>
-                    {rt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Dimensions */}
-          <div className="space-y-2">
-            <Label htmlFor="dims">Габариты</Label>
-            <Input
-              id="dims"
-              placeholder="4.2x3.1, высота 2.7"
-              value={form.dimensions_text}
-              onChange={(e) => set("dimensions_text", e.target.value)}
-            />
+          {/* Rooms */}
+          <div className="space-y-3">
+            <Label>Помещения *</Label>
+            {rooms.map((room, i) => (
+              <RoomCard
+                key={room.id}
+                room={room}
+                index={i}
+                canDelete={rooms.length > 1}
+                onChange={handleRoomChange}
+                onDelete={deleteRoom}
+              />
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={addRoom}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Добавить помещение
+            </Button>
           </div>
 
           {/* Raw input */}

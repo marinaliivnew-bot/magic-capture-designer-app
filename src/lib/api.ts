@@ -4,8 +4,6 @@ import { getSessionId } from "./session";
 // Projects
 export async function createProject(data: {
   name: string;
-  room_type?: string;
-  dimensions_text?: string;
   raw_input?: string;
   constraints?: Record<string, string>;
 }) {
@@ -14,8 +12,6 @@ export async function createProject(data: {
     .insert({
       session_id: getSessionId(),
       name: data.name,
-      room_type: data.room_type || null,
-      dimensions_text: data.dimensions_text || null,
       raw_input: data.raw_input || null,
       constraints: data.constraints || {},
     })

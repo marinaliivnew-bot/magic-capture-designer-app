@@ -261,6 +261,47 @@ export type Database = {
           },
         ]
       }
+      rooms: {
+        Row: {
+          created_at: string
+          dimensions_text: string | null
+          id: string
+          name: string
+          plan_url: string | null
+          project_id: string
+          room_type: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          dimensions_text?: string | null
+          id?: string
+          name: string
+          plan_url?: string | null
+          project_id: string
+          room_type?: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          dimensions_text?: string | null
+          id?: string
+          name?: string
+          plan_url?: string | null
+          project_id?: string
+          room_type?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rooms_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
