@@ -8,6 +8,7 @@ import NewProject from "./pages/NewProject";
 import BriefPage from "./pages/BriefPage";
 import QuestionsPage from "./pages/QuestionsPage";
 import ConceptBoard from "./pages/ConceptBoard";
+import StyleNarrowingPage from "./pages/StyleNarrowingPage";
 import ExportPage from "./pages/ExportPage";
 import NotFound from "./pages/NotFound";
 
