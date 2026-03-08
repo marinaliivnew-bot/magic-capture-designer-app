@@ -94,7 +94,13 @@ const BriefPage = () => {
             <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
           </button>
           <span className="font-display text-xl flex-1">{project?.name || "Бриф"}</span>
-        </div>
+          <button
+            onClick={() => navigate(`/project/${projectId}/edit`)}
+            className="text-muted-foreground hover:text-foreground transition-colors duration-350"
+            title="Редактировать проект"
+          >
+            <Settings className="h-5 w-5" strokeWidth={1.5} />
+          </button>
       </header>
 
       <div className="mx-auto max-w-content px-12 py-16">
