@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getBrief, getProject, upsertBrief } from "@/lib/api";
+import { getBrief, getProject, upsertBrief, analyzeBrief } from "@/lib/api";
 import { BRIEF_SECTIONS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { ArrowLeft, Search, LayoutGrid, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Search, LayoutGrid, Save, Loader2, Sparkles } from "lucide-react";
 
 const BriefPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
