@@ -46,6 +46,24 @@ export async function getProject(id: string) {
   return data;
 }
 
+export async function updateProject(id: string, fields: {
+  name?: string;
+  raw_input?: string | null;
+  rooms_description?: string | null;
+  plan_url?: string | null;
+  constraints?: Record<string, string>;
+}) {
+  const { data, error } = await supabase
+    .from("projects")
+    .update(fields)
+    .eq("id", id)
+    .eq("session_id", getSessionId())
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function deleteProject(id: string) {
   const { error } = await supabase
     .from("projects")

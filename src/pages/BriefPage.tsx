@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress, getProgressTextColor } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { ArrowLeft, Search, LayoutGrid, Save, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, Search, LayoutGrid, Save, Loader2, Sparkles, Settings } from "lucide-react";
 
 const BriefPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -94,6 +94,13 @@ const BriefPage = () => {
             <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
           </button>
           <span className="font-display text-xl flex-1">{project?.name || "Бриф"}</span>
+          <button
+            onClick={() => navigate(`/project/${projectId}/edit`)}
+            className="text-muted-foreground hover:text-foreground transition-colors duration-350"
+            title="Редактировать проект"
+          >
+            <Settings className="h-5 w-5" strokeWidth={1.5} />
+          </button>
         </div>
       </header>
 

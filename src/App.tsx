@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NewProject from "./pages/NewProject";
+import EditProject from "./pages/EditProject";
 import BriefPage from "./pages/BriefPage";
 import QuestionsPage from "./pages/QuestionsPage";
 import ConceptBoard from "./pages/ConceptBoard";
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/new" element={<NewProject />} />
           <Route path="/project/:projectId/brief" element={<BriefPage />} />
+          <Route path="/project/:projectId/edit" element={<EditProject />} />
           <Route path="/project/:projectId/style" element={<StyleNarrowingPage />} />
           <Route path="/project/:projectId/questions" element={<QuestionsPage />} />
           <Route path="/project/:projectId/board" element={<ConceptBoard />} />
