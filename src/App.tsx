@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NewProject from "./pages/NewProject";
+import EditProject from "./pages/EditProject";
 import BriefPage from "./pages/BriefPage";
 import QuestionsPage from "./pages/QuestionsPage";
 import ConceptBoard from "./pages/ConceptBoard";

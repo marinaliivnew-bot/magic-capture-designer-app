@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress, getProgressTextColor } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { ArrowLeft, Search, LayoutGrid, Save, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, Search, LayoutGrid, Save, Loader2, Sparkles, Settings } from "lucide-react";
 
 const BriefPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
