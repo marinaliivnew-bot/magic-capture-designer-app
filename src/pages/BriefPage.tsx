@@ -99,7 +99,7 @@ const BriefPage = () => {
         <div className="mb-16">
           <div className="mb-3 flex items-center justify-between">
             <span className="label-style text-muted-foreground">Заполненность</span>
-            <span className="label-style text-primary">{completeness}%</span>
+            <span className={cn("label-style", getProgressTextColor(completeness))}>{completeness}%</span>
           </div>
           <Progress value={completeness} />
         </div>
