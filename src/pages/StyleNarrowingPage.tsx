@@ -20,7 +20,7 @@ type ImageCache = Record<string, { url: string; attribution: string }>;
 const STEPS = [
   { key: "styles", title: "Стиль", subtitle: "Выберите 1–3 стиля, которые вам ближе", cards: STYLE_CARDS, min: 1, max: 3, allowRefs: true },
   { key: "colors", title: "Цвет", subtitle: "Выберите 1 цветовую палитру", cards: COLOR_CARDS, min: 1, max: 1, allowRefs: true },
-  { key: "materials", title: "Материалы", subtitle: "Выберите все подходящие материалы", cards: MATERIAL_CARDS, min: 1, max: 6, allowRefs: false },
+  { key: "materials", title: "Материалы", subtitle: "Выберите все подходящие материалы", cards: MATERIAL_CARDS, min: 1, max: 6, allowRefs: true },
   { key: "dislikes", title: "Антипатии", subtitle: "Что точно «не ваше»? (можно пропустить)", cards: DISLIKE_CARDS, min: 0, max: 10, allowRefs: false },
 ] as const;
 
