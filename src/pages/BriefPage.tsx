@@ -13,6 +13,7 @@ const BriefPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
+  const [rooms, setRooms] = useState<any[]>([]);
   const [brief, setBrief] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -22,11 +23,13 @@ const BriefPage = () => {
     if (!projectId) return;
     const load = async () => {
       try {
-        const [p, b] = await Promise.all([
+        const [p, b, r] = await Promise.all([
           getProject(projectId),
           getBrief(projectId),
+          getRooms(projectId),
         ]);
         setProject(p);
+        setRooms(r || []);
         if (b) {
           const fields: Record<string, string> = {};
           BRIEF_SECTIONS.forEach(({ key }) => {
