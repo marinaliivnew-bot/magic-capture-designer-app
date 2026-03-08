@@ -11,7 +11,7 @@ interface StyleCardProps {
   onClick: () => void;
 }
 
-const StyleCard = ({ label, imageUrl, attribution, selected, onClick }: StyleCardProps) => {
+const StyleCard = ({ label, description, imageUrl, attribution, selected, onClick }: StyleCardProps) => {
   const [imgLoaded, setImgLoaded] = useState(false);
 
   return (
