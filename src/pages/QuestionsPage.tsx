@@ -69,6 +69,29 @@ const QuestionsPage = () => {
     }
   };
 
+  const handleReanalyze = async () => {
+    if (!projectId) return;
+    setReanalyzing(true);
+    try {
+      const brief = await getBrief(projectId);
+      const briefText = BRIEF_SECTIONS.map(
+        ({ key }) => `### ${key}\n${(brief as any)?.[key] || "(пусто)"}`
+      ).join("\n\n");
+      const context = project
+        ? `Тип: ${project.room_type || "?"}, Размеры: ${project.dimensions_text || "?"}`
+        : "";
+      await analyzeBrief(projectId, briefText, context);
+      const [iss, qs] = await Promise.all([getIssues(projectId), getQuestions(projectId)]);
+      setIssues(iss || []);
+      setQuestions(qs || []);
+      toast.success("Анализ обновлён!");
+    } catch (e: any) {
+      toast.error(e.message || "Ошибка AI-анализа");
+    } finally {
+      setReanalyzing(false);
+    }
+  };
+
   const getPriorityBadge = (priority: string) => {
     const config = PRIORITY_CONFIG[priority as keyof typeof PRIORITY_CONFIG];
     if (!config) return <Badge variant="secondary">{priority}</Badge>;
