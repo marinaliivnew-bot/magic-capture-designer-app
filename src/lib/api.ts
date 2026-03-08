@@ -213,3 +213,29 @@ export async function updateBoardImage(imageId: string, fields: { url?: string; 
     .eq("id", imageId);
   if (error) throw error;
 }
+
+// AI Analysis
+export async function analyzeBrief(projectId: string, briefText: string, projectContext?: string) {
+  const resp = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-brief`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({ briefText, projectContext }),
+    }
+  );
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || `Analysis failed: ${resp.status}`);
+  }
+  const result = await resp.json();
+
+  // Save results to DB
+  await saveIssues(projectId, result.issues || []);
+  await saveQuestions(projectId, result.questions || []);
+
+  return result;
+}

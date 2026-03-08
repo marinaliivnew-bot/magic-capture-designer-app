@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getIssues, getQuestions, updateQuestion, getProject } from "@/lib/api";
-import { PRIORITY_CONFIG } from "@/lib/constants";
+import { getIssues, getQuestions, updateQuestion, getProject, getBrief, analyzeBrief } from "@/lib/api";
+import { PRIORITY_CONFIG, BRIEF_SECTIONS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, AlertTriangle, HelpCircle, ArrowRight } from "lucide-react";
+import { ArrowLeft, Loader2, AlertTriangle, HelpCircle, ArrowRight, Sparkles, RotateCcw } from "lucide-react";
 
 const QuestionsPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -16,6 +16,7 @@ const QuestionsPage = () => {
   const [issues, setIssues] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
@@ -65,6 +66,29 @@ const QuestionsPage = () => {
       toast.success("Ответ сохранён");
     } catch (e) {
       toast.error("Ошибка сохранения");
+    }
+  };
+
+  const handleReanalyze = async () => {
+    if (!projectId) return;
+    setReanalyzing(true);
+    try {
+      const brief = await getBrief(projectId);
+      const briefText = BRIEF_SECTIONS.map(
+        ({ key }) => `### ${key}\n${(brief as any)?.[key] || "(пусто)"}`
+      ).join("\n\n");
+      const context = project
+        ? `Тип: ${project.room_type || "?"}, Размеры: ${project.dimensions_text || "?"}`
+        : "";
+      await analyzeBrief(projectId, briefText, context);
+      const [iss, qs] = await Promise.all([getIssues(projectId), getQuestions(projectId)]);
+      setIssues(iss || []);
+      setQuestions(qs || []);
+      toast.success("Анализ обновлён!");
+    } catch (e: any) {
+      toast.error(e.message || "Ошибка AI-анализа");
+    } finally {
+      setReanalyzing(false);
     }
   };
 
@@ -148,14 +172,19 @@ const QuestionsPage = () => {
             <HelpCircle className="h-5 w-5 text-info" />
             Уточняющие вопросы
           </h2>
-          {questions.length === 0 ? (
+          {questions.length === 0 && !reanalyzing ? (
             <div className="rounded-lg border border-border bg-card p-8 text-center">
               <p className="text-muted-foreground">
                 Вопросы появятся после AI-анализа брифа.
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Подключение AI будет в следующем этапе.
-              </p>
+              <Button
+                className="mt-4"
+                onClick={handleReanalyze}
+                disabled={reanalyzing}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Запустить AI-анализ
+              </Button>
             </div>
           ) : (
             <div className="space-y-4">
@@ -210,6 +239,19 @@ const QuestionsPage = () => {
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Назад к брифу
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleReanalyze}
+            disabled={reanalyzing}
+            className="flex-1"
+          >
+            {reanalyzing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RotateCcw className="mr-2 h-4 w-4" />
+            )}
+            {reanalyzing ? "Анализирую…" : "Пере-анализ"}
           </Button>
           <Button
             onClick={() => navigate(`/project/${projectId}/board`)}

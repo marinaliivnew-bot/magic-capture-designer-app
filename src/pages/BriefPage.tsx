@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getBrief, getProject, upsertBrief } from "@/lib/api";
+import { getBrief, getProject, upsertBrief, analyzeBrief } from "@/lib/api";
 import { BRIEF_SECTIONS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { ArrowLeft, Search, LayoutGrid, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Search, LayoutGrid, Save, Loader2, Sparkles } from "lucide-react";
 
 const BriefPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -14,6 +14,7 @@ const BriefPage = () => {
   const [project, setProject] = useState<any>(null);
   const [brief, setBrief] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -137,21 +138,40 @@ const BriefPage = () => {
           </Button>
           <Button
             variant="outline"
-            onClick={() => {
-              handleSave();
-              navigate(`/project/${projectId}/questions`);
+            disabled={analyzing || saving}
+            onClick={async () => {
+              if (!projectId) return;
+              await handleSave();
+              setAnalyzing(true);
+              try {
+                const briefText = BRIEF_SECTIONS.map(
+                  ({ key, label }) => `### ${label}\n${brief[key] || "(пусто)"}`
+                ).join("\n\n");
+                const context = project
+                  ? `Тип: ${project.room_type || "?"}, Размеры: ${project.dimensions_text || "?"}, Заметки: ${project.raw_input || "нет"}`
+                  : "";
+                await analyzeBrief(projectId, briefText, context);
+                toast.success("Анализ завершён!");
+                navigate(`/project/${projectId}/questions`);
+              } catch (e: any) {
+                toast.error(e.message || "Ошибка AI-анализа");
+                console.error(e);
+              } finally {
+                setAnalyzing(false);
+              }
             }}
             className="flex-1"
           >
-            <Search className="mr-2 h-4 w-4" />
-            Найти пробелы и вопросы
+            {analyzing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-2 h-4 w-4" />
+            )}
+            {analyzing ? "Анализирую…" : "AI-анализ брифа"}
           </Button>
           <Button
             variant="outline"
-            onClick={() => {
-              handleSave();
-              navigate(`/project/${projectId}/board`);
-            }}
+            onClick={() => navigate(`/project/${projectId}/board`)}
             className="flex-1"
           >
             <LayoutGrid className="mr-2 h-4 w-4" />
