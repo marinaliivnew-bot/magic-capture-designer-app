@@ -9,19 +9,22 @@ import {
   type StyleCardDef,
 } from "@/lib/style-cards";
 import StyleCard from "@/components/StyleCard";
+import RefUploadCard, { type UserRef } from "@/components/RefUploadCard";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Loader2, SkipForward } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 
 type ImageCache = Record<string, { url: string; attribution: string }>;
 
 const STEPS = [
-  { key: "styles", title: "Стиль", subtitle: "Выберите 1–3 стиля, которые вам ближе", cards: STYLE_CARDS, min: 1, max: 3 },
-  { key: "colors", title: "Цвет", subtitle: "Выберите 1 цветовую палитру", cards: COLOR_CARDS, min: 1, max: 1 },
-  { key: "materials", title: "Материалы", subtitle: "Выберите все подходящие материалы", cards: MATERIAL_CARDS, min: 1, max: 6 },
-  { key: "dislikes", title: "Антипатии", subtitle: "Что точно «не ваше»? (можно пропустить)", cards: DISLIKE_CARDS, min: 0, max: 10 },
+  { key: "styles", title: "Стиль", subtitle: "Выберите 1–3 стиля, которые вам ближе", cards: STYLE_CARDS, min: 1, max: 3, allowRefs: true },
+  { key: "colors", title: "Цвет", subtitle: "Выберите 1 цветовую палитру", cards: COLOR_CARDS, min: 1, max: 1, allowRefs: true },
+  { key: "materials", title: "Материалы", subtitle: "Выберите все подходящие материалы", cards: MATERIAL_CARDS, min: 1, max: 6, allowRefs: false },
+  { key: "dislikes", title: "Антипатии", subtitle: "Что точно «не ваше»? (можно пропустить)", cards: DISLIKE_CARDS, min: 0, max: 10, allowRefs: false },
 ] as const;
+
+const MAX_REFS_PER_STEP = 3;
 
 const StyleNarrowingPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -33,6 +36,7 @@ const StyleNarrowingPage = () => {
     materials: [],
     dislikes: [],
   });
+  const [userRefs, setUserRefs] = useState<UserRef[]>([]);
   const [images, setImages] = useState<ImageCache>({});
   const [loadingImages, setLoadingImages] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -96,8 +100,20 @@ const StyleNarrowingPage = () => {
     [currentStep]
   );
 
-  const canProceed =
-    (selections[currentStep.key]?.length || 0) >= currentStep.min;
+  const handleAddRef = useCallback(
+    (ref: { url: string; type: "file" | "link" }) => {
+      setUserRefs((prev) => [...prev, { ...ref, step: currentStep.key }]);
+    },
+    [currentStep.key]
+  );
+
+  const handleRemoveRef = useCallback((index: number) => {
+    setUserRefs((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const stepRefCount = userRefs.filter((r) => r.step === currentStep.key).length;
+  const hasRefOrSelection =
+    (selections[currentStep.key]?.length || 0) + stepRefCount >= currentStep.min;
 
   const handleNext = () => {
     if (step < STEPS.length - 1) {
@@ -132,9 +148,16 @@ const StyleNarrowingPage = () => {
         ? selections.dislikes.map(getLabel).join(", ")
         : "";
 
+      const refsPayload = userRefs.map((r) => ({
+        url: r.url,
+        type: r.type,
+        step: r.step,
+      }));
+
       await upsertBrief(projectId, {
         style_likes: likes.join("\n"),
         style_dislikes: dislikes,
+        user_refs: refsPayload,
       });
 
       toast.success("Стилевые предпочтения сохранены");
@@ -180,10 +203,8 @@ const StyleNarrowingPage = () => {
       </header>
 
       <div className="mx-auto max-w-content px-12 py-16">
-        {/* Subtitle */}
         <p className="caption-style mb-8">{currentStep.subtitle}</p>
 
-        {/* Progress */}
         <div className="mb-12">
           <div className="mb-3 flex items-center justify-between">
             <span className="label-style text-muted-foreground">Шаг {step + 1} из {STEPS.length}</span>
@@ -192,7 +213,6 @@ const StyleNarrowingPage = () => {
           <Progress value={progress} />
         </div>
 
-        {/* Cards grid */}
         {loadingImages ? (
           <div className="flex items-center justify-center py-24">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -211,10 +231,20 @@ const StyleNarrowingPage = () => {
                 onClick={() => toggleSelection(card.key)}
               />
             ))}
+
+            {/* Upload ref cards — only on steps with allowRefs */}
+            {currentStep.allowRefs && (
+              <RefUploadCard
+                refs={userRefs}
+                step={currentStep.key}
+                maxRefs={MAX_REFS_PER_STEP}
+                onAdd={handleAddRef}
+                onRemove={handleRemoveRef}
+              />
+            )}
           </div>
         )}
 
-        {/* Actions */}
         <div className="mt-16 border-t border-border pt-8 flex gap-4">
           {step > 0 && (
             <Button variant="outline" onClick={handleBack}>
@@ -224,7 +254,7 @@ const StyleNarrowingPage = () => {
           )}
           <Button
             onClick={handleNext}
-            disabled={!canProceed && currentStep.min > 0}
+            disabled={!hasRefOrSelection && currentStep.min > 0}
             className="flex-1"
           >
             {saving ? (
