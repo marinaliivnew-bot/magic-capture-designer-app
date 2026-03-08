@@ -9,7 +9,7 @@ export const STYLE_CARDS = [
   { key: "organic", label: "Органик / Биофилия", query: "organic biophilic interior natural materials", description: "Живые растения, необработанное дерево, натуральный камень" },
   { key: "mediterranean", label: "Средиземноморский", query: "mediterranean interior white blue terracotta", description: "Терракота, арки, белые стены, тёплый свет" },
   { key: "art_deco", label: "Арт-деко", query: "art deco interior gold geometric luxury", description: "Геометрия, золото, бархат, роскошь деталей" },
-  { key: "wabi_sabi", label: "Ваби-саби", query: "wabi sabi interior japanese imperfect natural", description: "Несовершенство как красота, глина, грубые фактуры" },
+  { key: "wabi_sabi", label: "Ваби-саби", query: "wabi sabi interior design clay pottery handmade texture room", description: "Несовершенство как красота, глина, грубые фактуры" },
   { key: "contemporary", label: "Контемпорари", query: "contemporary interior design neutral warm 2024", description: "Актуальный нейтральный, без привязки к стилю" },
 ] as const;
 

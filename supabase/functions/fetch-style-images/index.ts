@@ -9,6 +9,61 @@ const corsHeaders = {
 
 const BUCKET = "style-images";
 
+// Tags/descriptions that indicate the photo contains people prominently
+const PEOPLE_KEYWORDS = [
+  "portrait", "woman", "man", "girl", "boy", "person", "people",
+  "model", "fashion", "couple", "family", "child", "baby", "face",
+  "selfie", "wedding", "bride", "groom",
+];
+
+// Tags that indicate the photo is actually an interior
+const INTERIOR_KEYWORDS = [
+  "interior", "room", "living", "bedroom", "kitchen", "bathroom",
+  "furniture", "sofa", "chair", "table", "lamp", "decor", "design",
+  "apartment", "house", "home", "wall", "floor", "ceiling",
+  "couch", "shelf", "cabinet", "dining", "office", "studio",
+  "architecture", "space", "minimal", "modern", "classic",
+];
+
+function hasPeople(photo: any): boolean {
+  const desc = (photo.description || "").toLowerCase();
+  const altDesc = (photo.alt_description || "").toLowerCase();
+  const tags = (photo.tags || []).map((t: any) => (t.title || "").toLowerCase());
+  const allText = [desc, altDesc, ...tags].join(" ");
+  return PEOPLE_KEYWORDS.some((kw) => allText.includes(kw));
+}
+
+function interiorScore(photo: any): number {
+  const desc = (photo.description || "").toLowerCase();
+  const altDesc = (photo.alt_description || "").toLowerCase();
+  const tags = (photo.tags || []).map((t: any) => (t.title || "").toLowerCase());
+  const allText = [desc, altDesc, ...tags].join(" ");
+  let score = 0;
+  for (const kw of INTERIOR_KEYWORDS) {
+    if (allText.includes(kw)) score++;
+  }
+  // Prefer landscape aspect ratio (width > height)
+  if (photo.width && photo.height && photo.width > photo.height) {
+    score += 2;
+  }
+  return score;
+}
+
+function pickBestPhoto(photos: any[]): any | null {
+  if (!photos || photos.length === 0) return null;
+
+  // Filter out photos with people
+  const filtered = photos.filter((p) => !hasPeople(p));
+
+  // If all filtered out, use originals but still try to pick best
+  const candidates = filtered.length > 0 ? filtered : photos;
+
+  // Sort by interior relevance score (descending)
+  candidates.sort((a, b) => interiorScore(b) - interiorScore(a));
+
+  return candidates[0];
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -16,7 +71,6 @@ serve(async (req) => {
 
   try {
     const { queries } = await req.json();
-    // queries: Record<string, string> — key → unsplash search query
 
     const UNSPLASH_ACCESS_KEY = Deno.env.get("UNSPLASH_ACCESS_KEY");
     if (!UNSPLASH_ACCESS_KEY) {
@@ -33,11 +87,10 @@ serve(async (req) => {
     const results: Record<string, { url: string; attribution: string }> = {};
 
     for (const [key, query] of Object.entries(queries as Record<string, string>)) {
-      // Use a hash of the query in the filename so changed queries get fresh images
       const queryHash = Array.from(new TextEncoder().encode(query)).reduce((h, b) => ((h << 5) - h + b) | 0, 0).toString(36);
       const fileName = `${key}_${queryHash}.jpg`;
 
-      // Check if file exists by listing
+      // Check cache
       const { data: fileList } = await supabase.storage
         .from(BUCKET)
         .list("", { search: fileName, limit: 1 });
@@ -46,16 +99,13 @@ serve(async (req) => {
         const { data: publicUrlData } = supabase.storage
           .from(BUCKET)
           .getPublicUrl(fileName);
-        results[key] = {
-          url: publicUrlData.publicUrl,
-          attribution: "",
-        };
+        results[key] = { url: publicUrlData.publicUrl, attribution: "" };
         continue;
       }
 
-      // Fetch from Unsplash
+      // Fetch 10 photos from Unsplash for better selection
       const unsplashResp = await fetch(
-        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`,
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=10&orientation=landscape&content_filter=high`,
         {
           headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` },
         }
@@ -68,7 +118,8 @@ serve(async (req) => {
       }
 
       const unsplashData = await unsplashResp.json();
-      const photo = unsplashData.results?.[0];
+      const photo = pickBestPhoto(unsplashData.results);
+
       if (!photo) {
         results[key] = { url: "", attribution: "" };
         continue;
@@ -77,7 +128,7 @@ serve(async (req) => {
       const imageUrl = photo.urls?.regular || photo.urls?.small;
       const attribution = `Photo by ${photo.user?.name} on Unsplash`;
 
-      // Download image
+      // Download and cache
       const imgResp = await fetch(imageUrl);
       if (!imgResp.ok) {
         results[key] = { url: imageUrl, attribution };
@@ -86,7 +137,6 @@ serve(async (req) => {
 
       const imgBlob = await imgResp.arrayBuffer();
 
-      // Upload to storage
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
         .upload(fileName, imgBlob, {
@@ -96,7 +146,6 @@ serve(async (req) => {
 
       if (uploadError) {
         console.error(`Upload error for "${key}":`, uploadError);
-        // Fallback to direct unsplash URL
         results[key] = { url: imageUrl, attribution };
         continue;
       }
@@ -105,10 +154,7 @@ serve(async (req) => {
         .from(BUCKET)
         .getPublicUrl(fileName);
 
-      results[key] = {
-        url: finalUrl.publicUrl,
-        attribution,
-      };
+      results[key] = { url: finalUrl.publicUrl, attribution };
     }
 
     return new Response(JSON.stringify({ images: results }), {
