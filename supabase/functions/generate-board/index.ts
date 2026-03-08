@@ -28,7 +28,7 @@ serve(async (req) => {
   }
 
   try {
-    const { briefText, projectContext } = await req.json();
+    const { briefText, projectContext, userRefs } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -38,11 +38,15 @@ serve(async (req) => {
       );
     }
 
+    const refsBlock = Array.isArray(userRefs) && userRefs.length > 0
+      ? `\n\n## Пользовательские референсы\nПользователь загрузил свои референсы. Учитывай их стилистику при генерации концепт-борда.\n${userRefs.map((r: { url: string; step?: string }) => `- [${r.step || "ref"}] ${r.url}`).join("\n")}`
+      : "";
+
     const userPrompt = `## Контекст проекта
 ${projectContext || "Не указан"}
 
 ## Бриф
-${briefText}`;
+${briefText}${refsBlock}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
