@@ -1,10 +1,16 @@
 export const STYLE_CARDS = [
-  { key: "scandinavian", label: "Скандинавский", query: "scandinavian interior design living room" },
-  { key: "minimalism", label: "Минимализм", query: "minimalist interior design white" },
-  { key: "classic", label: "Классика", query: "classic elegant interior design" },
-  { key: "loft", label: "Лофт", query: "loft industrial interior design" },
-  { key: "japandi", label: "Japandi", query: "japandi interior design wood" },
-  { key: "eclectic", label: "Эклектика", query: "eclectic colorful interior design" },
+  { key: "scandinavian", label: "Скандинавский", query: "scandinavian interior design living room", description: "" },
+  { key: "minimalism", label: "Минимализм", query: "minimalist interior design white", description: "" },
+  { key: "classic", label: "Классика", query: "classic elegant interior design", description: "" },
+  { key: "loft", label: "Лофт", query: "loft industrial interior design", description: "" },
+  { key: "japandi", label: "Japandi", query: "japandi interior design wood", description: "" },
+  { key: "eclectic", label: "Эклектика", query: "eclectic colorful interior design", description: "" },
+  { key: "provence", label: "Прованс", query: "provence french country interior design", description: "Мягкие фактуры, льняные ткани, выцветшие оттенки" },
+  { key: "organic", label: "Органик / Биофилия", query: "organic biophilic interior natural materials", description: "Живые растения, необработанное дерево, натуральный камень" },
+  { key: "mediterranean", label: "Средиземноморский", query: "mediterranean interior white blue terracotta", description: "Терракота, арки, белые стены, тёплый свет" },
+  { key: "art_deco", label: "Арт-деко", query: "art deco interior gold geometric luxury", description: "Геометрия, золото, бархат, роскошь деталей" },
+  { key: "wabi_sabi", label: "Ваби-саби", query: "wabi sabi interior japanese imperfect natural", description: "Несовершенство как красота, глина, грубые фактуры" },
+  { key: "contemporary", label: "Контемпорари", query: "contemporary interior design neutral warm 2024", description: "Актуальный нейтральный, без привязки к стилю" },
 ] as const;
 
 export const COLOR_CARDS = [
