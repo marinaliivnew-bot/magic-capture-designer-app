@@ -16,6 +16,7 @@ const BriefPage = () => {
   const [project, setProject] = useState<any>(null);
   const [rooms, setRooms] = useState<any[]>([]);
   const [brief, setBrief] = useState<Record<string, string>>({});
+  const [userRefs, setUserRefs] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [loading, setLoading] = useState(true);
