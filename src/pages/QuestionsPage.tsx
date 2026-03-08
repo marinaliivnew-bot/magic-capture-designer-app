@@ -16,6 +16,7 @@ const QuestionsPage = () => {
   const [issues, setIssues] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
