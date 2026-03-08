@@ -14,7 +14,253 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      board_blocks: {
+        Row: {
+          block_type: string
+          caption: string | null
+          created_at: string
+          id: string
+          project_id: string
+          sort_order: number
+        }
+        Insert: {
+          block_type: string
+          caption?: string | null
+          created_at?: string
+          id?: string
+          project_id: string
+          sort_order?: number
+        }
+        Update: {
+          block_type?: string
+          caption?: string | null
+          created_at?: string
+          id?: string
+          project_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_blocks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_images: {
+        Row: {
+          attribution: string | null
+          block_id: string
+          created_at: string
+          id: string
+          note: string | null
+          source_type: string | null
+          source_url: string | null
+          url: string | null
+        }
+        Insert: {
+          attribution?: string | null
+          block_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          source_type?: string | null
+          source_url?: string | null
+          url?: string | null
+        }
+        Update: {
+          attribution?: string | null
+          block_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          source_type?: string | null
+          source_url?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_images_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "board_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      briefs: {
+        Row: {
+          completeness_score: number | null
+          constraints_practical: string | null
+          created_at: string
+          id: string
+          project_id: string
+          scenarios: string | null
+          storage: string | null
+          style_dislikes: string | null
+          style_likes: string | null
+          success_criteria: string | null
+          updated_at: string
+          users_of_space: string | null
+          zones: string | null
+        }
+        Insert: {
+          completeness_score?: number | null
+          constraints_practical?: string | null
+          created_at?: string
+          id?: string
+          project_id: string
+          scenarios?: string | null
+          storage?: string | null
+          style_dislikes?: string | null
+          style_likes?: string | null
+          success_criteria?: string | null
+          updated_at?: string
+          users_of_space?: string | null
+          zones?: string | null
+        }
+        Update: {
+          completeness_score?: number | null
+          constraints_practical?: string | null
+          created_at?: string
+          id?: string
+          project_id?: string
+          scenarios?: string | null
+          storage?: string | null
+          style_dislikes?: string | null
+          style_likes?: string | null
+          success_criteria?: string | null
+          updated_at?: string
+          users_of_space?: string | null
+          zones?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "briefs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      issues: {
+        Row: {
+          created_at: string
+          evidence: string | null
+          id: string
+          impact: string | null
+          project_id: string
+          suggestion: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          evidence?: string | null
+          id?: string
+          impact?: string | null
+          project_id: string
+          suggestion?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          evidence?: string | null
+          id?: string
+          impact?: string | null
+          project_id?: string
+          suggestion?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issues_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          constraints: Json | null
+          created_at: string
+          dimensions_text: string | null
+          id: string
+          name: string
+          raw_input: string | null
+          room_type: string | null
+          session_id: string
+        }
+        Insert: {
+          constraints?: Json | null
+          created_at?: string
+          dimensions_text?: string | null
+          id?: string
+          name: string
+          raw_input?: string | null
+          room_type?: string | null
+          session_id: string
+        }
+        Update: {
+          constraints?: Json | null
+          created_at?: string
+          dimensions_text?: string | null
+          id?: string
+          name?: string
+          raw_input?: string | null
+          room_type?: string | null
+          session_id?: string
+        }
+        Relationships: []
+      }
+      questions: {
+        Row: {
+          answer: string | null
+          asked: boolean
+          created_at: string
+          id: string
+          priority: string
+          project_id: string
+          text: string
+          unlocks: string | null
+        }
+        Insert: {
+          answer?: string | null
+          asked?: boolean
+          created_at?: string
+          id?: string
+          priority?: string
+          project_id: string
+          text: string
+          unlocks?: string | null
+        }
+        Update: {
+          answer?: string | null
+          asked?: boolean
+          created_at?: string
+          id?: string
+          priority?: string
+          project_id?: string
+          text?: string
+          unlocks?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
