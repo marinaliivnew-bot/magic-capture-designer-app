@@ -38,6 +38,7 @@ const BriefPage = () => {
             fields[key] = (b as any)[key] || "";
           });
           setBrief(fields);
+          setUserRefs(Array.isArray((b as any).user_refs) ? (b as any).user_refs : []);
         }
       } catch (e) {
         toast.error("Ошибка загрузки проекта");
