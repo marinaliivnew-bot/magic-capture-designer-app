@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 
 interface StyleCardProps {
   label: string;
+  description?: string;
   imageUrl: string;
   attribution?: string;
   selected: boolean;
