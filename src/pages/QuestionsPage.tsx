@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getIssues, getQuestions, updateQuestion, getProject } from "@/lib/api";
-import { PRIORITY_CONFIG } from "@/lib/constants";
+import { getIssues, getQuestions, updateQuestion, getProject, getBrief, analyzeBrief } from "@/lib/api";
+import { PRIORITY_CONFIG, BRIEF_SECTIONS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
