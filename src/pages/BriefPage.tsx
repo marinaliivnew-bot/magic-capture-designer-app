@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 import { useParams, useNavigate } from "react-router-dom";
 import { getBrief, getProject, upsertBrief, analyzeBrief } from "@/lib/api";
 import { getRooms } from "@/lib/rooms";
 import { BRIEF_SECTIONS, ROOM_TYPES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
+import { Progress, getProgressTextColor } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { ArrowLeft, Search, LayoutGrid, Save, Loader2, Sparkles } from "lucide-react";
 
@@ -99,7 +100,7 @@ const BriefPage = () => {
         <div className="mb-16">
           <div className="mb-3 flex items-center justify-between">
             <span className="label-style text-muted-foreground">Заполненность</span>
-            <span className="label-style text-primary">{completeness}%</span>
+            <span className={cn("label-style", getProgressTextColor(completeness))}>{completeness}%</span>
           </div>
           <Progress value={completeness} />
         </div>

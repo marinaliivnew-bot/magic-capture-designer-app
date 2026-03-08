@@ -139,8 +139,8 @@ const QuestionsPage = () => {
             </h2>
             <div className="divide-y divide-border">
               {issues.filter(i => i.type === 'contradiction').map((issue) => (
-                <div key={issue.id} className="py-6">
-                  <h3 className="text-foreground">{issue.title}</h3>
+                <div key={issue.id} className="py-6 border-l-[3px] border-l-[hsl(var(--color-critical))] pl-6">
+                  <h3 className="text-[hsl(var(--color-critical))]">{issue.title}</h3>
                   {issue.evidence && (
                     <p className="mt-2 caption-style italic">
                       «{issue.evidence}»

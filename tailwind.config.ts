@@ -59,6 +59,13 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        status: {
+          critical: "hsl(var(--color-critical))",
+          "critical-bg": "hsl(var(--color-critical-bg))",
+          important: "hsl(var(--color-important))",
+          "important-bg": "hsl(var(--color-important-bg))",
+          optional: "hsl(var(--color-optional))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

@@ -57,10 +57,13 @@
     --sidebar-border: 25 18% 86%;
     --sidebar-ring: 27 33% 47%;
 
-    /* Priority tokens — editorial approach */
-    --priority-critical: 4 64% 46%;
-    --priority-important: 27 33% 47%;
-    --priority-optional: 25 18% 86%;
+    /* Status tokens */
+    --color-critical: 0 63% 33%;       /* #8B2020 */
+    --color-critical-bg: 0 43% 96%;    /* #F9F0F0 */
+    --color-important: 27 33% 47%;     /* = --primary / --accent */
+    --color-important-bg: 30 28% 95%;  /* #F7F3EE */
+    --color-optional: 25 5% 45%;       /* = --muted-foreground */
+    --color-optional-bg: 0 0% 0% / 0;  /* transparent */
   }
 }
 
