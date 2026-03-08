@@ -12,8 +12,6 @@ export async function createProject(data: {
     .insert({
       session_id: getSessionId(),
       name: data.name,
-      room_type: data.room_type || null,
-      dimensions_text: data.dimensions_text || null,
       raw_input: data.raw_input || null,
       constraints: data.constraints || {},
     })
