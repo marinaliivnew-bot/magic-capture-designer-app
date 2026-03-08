@@ -14,10 +14,13 @@ export const STYLE_CARDS = [
 ] as const;
 
 export const COLOR_CARDS = [
-  { key: "warm_neutral", label: "Тёплый нейтральный", query: "warm neutral beige interior" },
-  { key: "cool_neutral", label: "Холодный нейтральный", query: "cool grey neutral interior" },
-  { key: "dark", label: "Тёмный", query: "dark moody interior design" },
-  { key: "bright_accent", label: "Яркие акценты", query: "colorful accent interior design" },
+  { key: "warm_neutral", label: "Тёплый нейтральный", query: "warm neutral beige interior", description: "" },
+  { key: "cool_neutral", label: "Холодный нейтральный", query: "cool grey minimalist interior concrete white", description: "" },
+  { key: "dark", label: "Тёмный", query: "dark moody interior black walls bedroom", description: "" },
+  { key: "bright_accent", label: "Яркие акценты", query: "colorful accent interior design", description: "" },
+  { key: "earthy_olive", label: "Землянистый / Оливковый", query: "earthy green olive interior design living room", description: "Мох и зелень, терракота, тёплые земляные оттенки" },
+  { key: "dusty_rose", label: "Розовый / Пудровый", query: "dusty rose blush pink interior bedroom soft", description: "Мягкий розовый, приглушённый, без кричащих цветов" },
+  { key: "graphic_bw", label: "Графитный / Чёрно-белый", query: "black white graphic interior bold contrast", description: "Максимальный контраст, без цвета" },
 ] as const;
 
 export const MATERIAL_CARDS = [

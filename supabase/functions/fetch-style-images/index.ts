@@ -33,17 +33,9 @@ serve(async (req) => {
     const results: Record<string, { url: string; attribution: string }> = {};
 
     for (const [key, query] of Object.entries(queries as Record<string, string>)) {
-      const fileName = `${key}.jpg`;
-
-      // Check cache first
-      const { data: existing } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(fileName, 60);
-
-      // Try to get public URL — if file exists, use it
-      const { data: publicUrlData } = supabase.storage
-        .from(BUCKET)
-        .getPublicUrl(fileName);
+      // Use a hash of the query in the filename so changed queries get fresh images
+      const queryHash = Array.from(new TextEncoder().encode(query)).reduce((h, b) => ((h << 5) - h + b) | 0, 0).toString(36);
+      const fileName = `${key}_${queryHash}.jpg`;
 
       // Check if file exists by listing
       const { data: fileList } = await supabase.storage
@@ -51,9 +43,12 @@ serve(async (req) => {
         .list("", { search: fileName, limit: 1 });
 
       if (fileList && fileList.length > 0 && fileList[0].name === fileName) {
+        const { data: publicUrlData } = supabase.storage
+          .from(BUCKET)
+          .getPublicUrl(fileName);
         results[key] = {
           url: publicUrlData.publicUrl,
-          attribution: "", // cached, attribution was stored on first fetch
+          attribution: "",
         };
         continue;
       }
