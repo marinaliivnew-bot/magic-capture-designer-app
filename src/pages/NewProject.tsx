@@ -145,7 +145,7 @@ const NewProject = () => {
       }
 
       toast.success("Проект создан!");
-      navigate(`/project/${project.id}/brief`);
+      navigate(`/project/${project.id}/style`);
     } catch (e) {
       toast.error("Ошибка при создании проекта");
       console.error(e);

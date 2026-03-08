@@ -8,6 +8,7 @@ import NewProject from "./pages/NewProject";
 import BriefPage from "./pages/BriefPage";
 import QuestionsPage from "./pages/QuestionsPage";
 import ConceptBoard from "./pages/ConceptBoard";
+import StyleNarrowingPage from "./pages/StyleNarrowingPage";
 import ExportPage from "./pages/ExportPage";
 import NotFound from "./pages/NotFound";
 
@@ -23,6 +24,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/new" element={<NewProject />} />
           <Route path="/project/:projectId/brief" element={<BriefPage />} />
+          <Route path="/project/:projectId/style" element={<StyleNarrowingPage />} />
           <Route path="/project/:projectId/questions" element={<QuestionsPage />} />
           <Route path="/project/:projectId/board" element={<ConceptBoard />} />
           <Route path="/project/:projectId/export" element={<ExportPage />} />
