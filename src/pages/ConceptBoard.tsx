@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getBoardBlocks, getProject, updateBoardBlock, updateBoardImage } from "@/lib/api";
-import { BOARD_BLOCK_TYPES } from "@/lib/constants";
+import { getBoardBlocks, getProject, getBrief, updateBoardBlock, updateBoardImage, generateBoard } from "@/lib/api";
+import { getRooms } from "@/lib/rooms";
+import { BOARD_BLOCK_TYPES, BRIEF_SECTIONS, ROOM_TYPES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +14,7 @@ import {
   ImageIcon,
   Pencil,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 
 const ConceptBoard = () => {
@@ -21,30 +23,74 @@ const ConceptBoard = () => {
   const [project, setProject] = useState<any>(null);
   const [blocks, setBlocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [editingCaption, setEditingCaption] = useState<string | null>(null);
   const [editingImageUrl, setEditingImageUrl] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadData = async () => {
     if (!projectId) return;
-    const load = async () => {
-      try {
-        const [p, b] = await Promise.all([
-          getProject(projectId),
-          getBoardBlocks(projectId),
-        ]);
-        setProject(p);
-        setBlocks(b || []);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    try {
+      const [p, b] = await Promise.all([
+        getProject(projectId),
+        getBoardBlocks(projectId),
+      ]);
+      setProject(p);
+      setBlocks(b || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
   }, [projectId]);
 
   const getBlockLabel = (type: string) =>
     BOARD_BLOCK_TYPES.find((b) => b.type === type)?.label || type;
+
+  const handleGenerate = async () => {
+    if (!projectId) return;
+    setGenerating(true);
+    try {
+      const [brief, rooms] = await Promise.all([
+        getBrief(projectId),
+        getRooms(projectId),
+      ]);
+
+      const briefText = brief
+        ? BRIEF_SECTIONS.map(
+            ({ key, label }) => `### ${label}\n${(brief as any)[key] || "(пусто)"}`
+          ).join("\n\n")
+        : "(бриф не заполнен)";
+
+      const roomsContext = rooms && rooms.length > 0
+        ? rooms.map((r: any) => {
+            const typeLabel = ROOM_TYPES.find(t => t.value === r.room_type)?.label || r.room_type;
+            let line = `- ${r.name} (${typeLabel})`;
+            if (r.dimensions_text) line += `, размеры: ${r.dimensions_text}`;
+            return line;
+          }).join("\n")
+        : "Не указаны";
+
+      const planNote = project?.plan_url ? `\nПлан помещения: ${project.plan_url}` : "";
+      const descNote = project?.rooms_description ? `\nОписание: ${project.rooms_description}` : "";
+      const context = `Помещения:\n${roomsContext}${descNote}${planNote}\nЗаметки: ${project?.raw_input || "нет"}`;
+
+      await generateBoard(projectId, briefText, context);
+      
+      // Reload blocks
+      const freshBlocks = await getBoardBlocks(projectId);
+      setBlocks(freshBlocks || []);
+      toast.success("Концепт-борд сгенерирован!");
+    } catch (e: any) {
+      toast.error(e.message || "Ошибка генерации борда");
+      console.error(e);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleSaveCaption = async (blockId: string, caption: string) => {
     try {
@@ -103,120 +149,56 @@ const ConceptBoard = () => {
             </h1>
             <p className="text-sm text-muted-foreground">{project?.name}</p>
           </div>
+          <Button
+            onClick={handleGenerate}
+            disabled={generating}
+          >
+            {generating ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-2 h-4 w-4" />
+            )}
+            {generating ? "Генерирую…" : blocks.length > 0 ? "Перегенерировать" : "Сгенерировать"}
+          </Button>
         </div>
 
-        {blocks.length === 0 ? (
+        {blocks.length === 0 && !generating ? (
           <div className="rounded-lg border border-border bg-card p-12 text-center">
-            <LayoutGridPlaceholder />
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+              <ImageIcon className="h-8 w-8 text-muted-foreground" />
+            </div>
             <h3 className="mt-4 font-display text-xl text-foreground">
               Борд пока пуст
             </h3>
             <p className="mt-2 text-muted-foreground">
-              Концепт-борд будет сгенерирован после подключения AI.
+              Нажмите «Сгенерировать», чтобы AI создал концепт-борд на основе брифа.
+            </p>
+            <Button onClick={handleGenerate} className="mt-4" disabled={generating}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Сгенерировать борд
+            </Button>
+          </div>
+        ) : generating ? (
+          <div className="rounded-lg border border-border bg-card p-12 text-center">
+            <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
+            <p className="mt-4 text-muted-foreground">
+              AI генерирует концепт-борд…
             </p>
           </div>
         ) : (
           <div className="space-y-8">
             {blocks.map((block) => (
-              <div
+              <BoardBlock
                 key={block.id}
-                className="rounded-xl border border-border bg-card p-5"
-              >
-                <h3 className="mb-3 font-display text-lg text-foreground">
-                  {getBlockLabel(block.block_type)}
-                </h3>
-
-                {/* Images */}
-                <div className="mb-4 grid gap-4 sm:grid-cols-2">
-                  {block.board_images?.map((img: any) => (
-                    <div key={img.id} className="group relative">
-                      {img.url ? (
-                        <img
-                          src={img.url}
-                          alt={block.caption || ""}
-                          className="h-48 w-full rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-48 w-full items-center justify-center rounded-lg bg-muted">
-                          <ImageIcon className="h-10 w-10 text-muted-foreground" />
-                        </div>
-                      )}
-
-                      {/* Source badge */}
-                      {img.source_type && (
-                        <span className="absolute bottom-2 left-2 rounded-full bg-foreground/70 px-2 py-0.5 text-[10px] font-medium text-background">
-                          {img.source_type}
-                        </span>
-                      )}
-
-                      {/* Replace controls */}
-                      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Button
-                          size="icon"
-                          variant="secondary"
-                          className="h-7 w-7"
-                          onClick={() =>
-                            setEditingImageUrl(
-                              editingImageUrl === img.id ? null : img.id
-                            )
-                          }
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        {img.source_url && (
-                          <a
-                            href={img.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Button size="icon" variant="secondary" className="h-7 w-7">
-                              <ExternalLink className="h-3 w-3" />
-                            </Button>
-                          </a>
-                        )}
-                      </div>
-
-                      {editingImageUrl === img.id && (
-                        <div className="mt-2">
-                          <Input
-                            placeholder="Вставьте URL изображения"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                handleReplaceImage(img.id, (e.target as HTMLInputElement).value);
-                              }
-                            }}
-                          />
-                        </div>
-                      )}
-
-                      {img.attribution && (
-                        <p className="mt-1 text-[10px] text-muted-foreground">
-                          {img.attribution}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Caption */}
-                {editingCaption === block.id ? (
-                  <Textarea
-                    defaultValue={block.caption || ""}
-                    className="text-sm"
-                    onBlur={(e) =>
-                      handleSaveCaption(block.id, e.target.value)
-                    }
-                    autoFocus
-                  />
-                ) : (
-                  <p
-                    className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setEditingCaption(block.id)}
-                  >
-                    {block.caption || "Нажмите, чтобы добавить подпись..."}
-                  </p>
-                )}
-              </div>
+                block={block}
+                getBlockLabel={getBlockLabel}
+                editingCaption={editingCaption}
+                setEditingCaption={setEditingCaption}
+                editingImageUrl={editingImageUrl}
+                setEditingImageUrl={setEditingImageUrl}
+                onSaveCaption={handleSaveCaption}
+                onReplaceImage={handleReplaceImage}
+              />
             ))}
           </div>
         )}
@@ -244,10 +226,110 @@ const ConceptBoard = () => {
   );
 };
 
-function LayoutGridPlaceholder() {
+function BoardBlock({
+  block,
+  getBlockLabel,
+  editingCaption,
+  setEditingCaption,
+  editingImageUrl,
+  setEditingImageUrl,
+  onSaveCaption,
+  onReplaceImage,
+}: {
+  block: any;
+  getBlockLabel: (type: string) => string;
+  editingCaption: string | null;
+  setEditingCaption: (id: string | null) => void;
+  editingImageUrl: string | null;
+  setEditingImageUrl: (id: string | null) => void;
+  onSaveCaption: (blockId: string, caption: string) => void;
+  onReplaceImage: (imageId: string, url: string) => void;
+}) {
   return (
-    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+    <div className="rounded-xl border border-border bg-card p-5">
+      <h3 className="mb-3 font-display text-lg text-foreground">
+        {getBlockLabel(block.block_type)}
+      </h3>
+
+      {/* Images */}
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {block.board_images?.map((img: any) => (
+          <div key={img.id} className="group relative">
+            {img.url ? (
+              <img
+                src={img.url}
+                alt={block.caption || ""}
+                className="h-48 w-full rounded-lg object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex h-48 w-full items-center justify-center rounded-lg bg-muted">
+                <ImageIcon className="h-10 w-10 text-muted-foreground" />
+              </div>
+            )}
+
+            {/* Note (search query) */}
+            {img.note && (
+              <span className="absolute bottom-2 left-2 max-w-[80%] truncate rounded-full bg-foreground/70 px-2 py-0.5 text-[10px] font-medium text-background">
+                {img.note}
+              </span>
+            )}
+
+            {/* Replace controls */}
+            <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-7 w-7"
+                onClick={() =>
+                  setEditingImageUrl(
+                    editingImageUrl === img.id ? null : img.id
+                  )
+                }
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+              {img.source_url && (
+                <a href={img.source_url} target="_blank" rel="noopener noreferrer">
+                  <Button size="icon" variant="secondary" className="h-7 w-7">
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                </a>
+              )}
+            </div>
+
+            {editingImageUrl === img.id && (
+              <div className="mt-2">
+                <Input
+                  placeholder="Вставьте URL изображения"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      onReplaceImage(img.id, (e.target as HTMLInputElement).value);
+                    }
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Caption */}
+      {editingCaption === block.id ? (
+        <Textarea
+          defaultValue={block.caption || ""}
+          className="text-sm"
+          onBlur={(e) => onSaveCaption(block.id, e.target.value)}
+          autoFocus
+        />
+      ) : (
+        <p
+          className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setEditingCaption(block.id)}
+        >
+          {block.caption || "Нажмите, чтобы добавить подпись..."}
+        </p>
+      )}
     </div>
   );
 }
