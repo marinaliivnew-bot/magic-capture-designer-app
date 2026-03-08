@@ -125,6 +125,36 @@ const BriefPage = () => {
           ))}
         </div>
 
+        {/* User refs preview */}
+        {(() => {
+          const userRefs = (brief as any)?.user_refs || [];
+          // Also check saved brief from DB
+          return null; // handled below
+        })()}
+        {briefUserRefs.length > 0 && (
+          <div className="mt-16">
+            <span className="label-style text-muted-foreground block mb-4">Загруженные референсы</span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {briefUserRefs.map((ref: any, idx: number) => (
+                <div key={ref.url || idx} className="group relative overflow-hidden border border-border">
+                  <div className="aspect-[4/3] w-full overflow-hidden bg-muted">
+                    <img
+                      src={ref.url}
+                      alt={`Референс ${idx + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  {ref.step && (
+                    <div className="px-3 py-2">
+                      <p className="text-[11px] text-muted-foreground capitalize">{ref.step}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="mt-16 border-t border-border pt-8 flex flex-col gap-4 sm:flex-row">
           <Button onClick={handleSave} disabled={saving} className="flex-1">
