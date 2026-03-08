@@ -42,7 +42,6 @@ const ExportPage = () => {
   }, [projectId]);
 
   const handleExportPDF = () => {
-    // In MVP, we use browser print as a simple PDF export
     toast.info("Используйте Ctrl+P / Cmd+P для сохранения в PDF");
     setTimeout(() => window.print(), 300);
   };
@@ -53,167 +52,119 @@ const ExportPage = () => {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-3xl px-4 py-8">
-        {/* Navigation (hidden in print) */}
-        <div className="mb-6 flex items-center gap-3 print:hidden">
-          <Button
-            variant="ghost"
-            size="icon"
+      {/* Navigation (hidden in print) */}
+      <header className="border-b border-border bg-background print:hidden">
+        <div className="mx-auto max-w-content px-12 py-4 flex items-center gap-4">
+          <button
             onClick={() => navigate(`/project/${projectId}/board`)}
+            className="text-muted-foreground hover:text-foreground transition-colors duration-350"
           >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-display text-foreground">
-              Экспорт PDF
-            </h1>
-          </div>
-          <Button onClick={handleExportPDF}>
+            <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
+          </button>
+          <span className="font-display text-xl flex-1">Экспорт</span>
+          <Button onClick={handleExportPDF} size="sm">
             <Download className="mr-2 h-4 w-4" />
             Скачать PDF
           </Button>
         </div>
+      </header>
 
-        {/* Printable content */}
-        <div className="space-y-8 print:space-y-6">
-          {/* Title page */}
-          <div className="rounded-lg border border-border bg-card p-8 text-center print:border-none print:p-0">
-            <h1 className="text-3xl font-display text-foreground">
-              {project?.name}
-            </h1>
-            <p className="mt-2 text-muted-foreground">
-              {project?.room_type && `Тип: ${project.room_type}`}
-              {project?.room_type && project?.dimensions_text && " · "}
-              {project?.dimensions_text && `Габариты: ${project.dimensions_text}`}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {new Date().toLocaleDateString("ru-RU")}
-            </p>
+      <div className="mx-auto max-w-content px-12 py-16">
+        {/* Title */}
+        <div className="mb-16 text-center print:mb-8">
+          <h1 className="text-foreground">{project?.name}</h1>
+          <p className="mt-4 caption-style">
+            {new Date().toLocaleDateString("ru-RU")}
+          </p>
+        </div>
+
+        {/* Brief */}
+        <section className="mb-16">
+          <h2 className="mb-8 text-foreground">Бриф</h2>
+          <div className="divide-y divide-border">
+            {BRIEF_SECTIONS.map(({ key, label }) => (
+              <div key={key} className="py-6 print:py-3">
+                <span className="label-style text-foreground">{label}</span>
+                <p className="mt-2 text-[15px] font-light text-muted-foreground">
+                  {brief?.[key] || "не указано"}
+                </p>
+              </div>
+            ))}
           </div>
+        </section>
 
-          {/* Brief */}
-          <div>
-            <h2 className="mb-4 text-xl font-display text-foreground">Бриф</h2>
-            <div className="space-y-4">
-              {BRIEF_SECTIONS.map(({ key, label }) => (
-                <div key={key} className="rounded-lg border border-border bg-card p-4 print:border-none print:p-2">
-                  <h3 className="text-sm font-semibold text-foreground">{label}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {brief?.[key] || "не указано"}
-                  </p>
+        {/* Contradictions */}
+        {issues.filter((i) => i.type === "contradiction").length > 0 && (
+          <section className="mb-16">
+            <h2 className="mb-8 text-foreground">Противоречия</h2>
+            <div className="divide-y divide-border">
+              {issues
+                .filter((i) => i.type === "contradiction")
+                .map((issue) => (
+                  <div key={issue.id} className="py-6 print:py-3">
+                    <h3 className="text-foreground">{issue.title}</h3>
+                    {issue.evidence && (
+                      <p className="mt-1 caption-style italic">«{issue.evidence}»</p>
+                    )}
+                    {issue.suggestion && (
+                      <p className="mt-2 text-[15px] text-primary font-light">{issue.suggestion}</p>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </section>
+        )}
+
+        {/* Questions */}
+        {questions.length > 0 && (
+          <section className="mb-16">
+            <h2 className="mb-8 text-foreground">Вопросы</h2>
+            <div className="divide-y divide-border">
+              {questions.map((q) => (
+                <div key={q.id} className="py-4 print:py-2">
+                  <div className="flex items-center gap-3">
+                    <span className="label-style text-muted-foreground">[{q.priority}]</span>
+                    <span className="text-[15px] font-light text-foreground">{q.text}</span>
+                  </div>
+                  {q.answer && (
+                    <p className="mt-1 text-[15px] text-primary font-light">
+                      Ответ: {q.answer}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
-          </div>
+          </section>
+        )}
 
-          {/* Contradictions */}
-          {issues.filter((i) => i.type === "contradiction").length > 0 && (
-            <div>
-              <h2 className="mb-4 text-xl font-display text-foreground">
-                Противоречия
-              </h2>
-              <div className="space-y-3">
-                {issues
-                  .filter((i) => i.type === "contradiction")
-                  .map((issue) => (
-                    <div key={issue.id} className="rounded-lg border border-border bg-card p-4 print:border-none print:p-2">
-                      <h3 className="font-semibold text-foreground text-sm">
-                        {issue.title}
-                      </h3>
-                      {issue.evidence && (
-                        <p className="text-sm text-muted-foreground italic">
-                          «{issue.evidence}»
-                        </p>
-                      )}
-                      {issue.suggestion && (
-                        <p className="text-sm text-primary">{issue.suggestion}</p>
-                      )}
-                    </div>
-                  ))}
-              </div>
+        {/* Concept board */}
+        {blocks.length > 0 && (
+          <section className="mb-16">
+            <h2 className="mb-8 text-foreground">Концепт-борд</h2>
+            <div className="divide-y divide-border">
+              {blocks.map((block) => (
+                <div key={block.id} className="py-6 print:py-3">
+                  <h3 className="text-foreground">{getBlockLabel(block.block_type)}</h3>
+                  {block.caption && (
+                    <p className="mt-2 text-[15px] font-light text-muted-foreground">{block.caption}</p>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
+          </section>
+        )}
 
-          {/* Questions */}
-          {questions.length > 0 && (
-            <div>
-              <h2 className="mb-4 text-xl font-display text-foreground">
-                Вопросы
-              </h2>
-              <div className="space-y-2">
-                {questions.map((q) => (
-                  <div key={q.id} className="rounded-lg border border-border bg-card p-3 print:border-none print:p-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium uppercase text-muted-foreground">
-                        [{q.priority}]
-                      </span>
-                      <span className="text-sm text-foreground">{q.text}</span>
-                    </div>
-                    {q.answer && (
-                      <p className="mt-1 text-sm text-primary">
-                        Ответ: {q.answer}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Concept board */}
-          {blocks.length > 0 && (
-            <div>
-              <h2 className="mb-4 text-xl font-display text-foreground">
-                Концепт-борд
-              </h2>
-              <div className="space-y-4">
-                {blocks.map((block) => (
-                  <div key={block.id} className="rounded-lg border border-border bg-card p-4 print:border-none print:p-2">
-                    <h3 className="font-semibold text-foreground text-sm">
-                      {getBlockLabel(block.block_type)}
-                    </h3>
-                    {block.caption && (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {block.caption}
-                      </p>
-                    )}
-                    {block.board_images?.map((img: any) => (
-                      <div key={img.id} className="mt-2">
-                        {img.url && (
-                          <a
-                            href={img.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-primary underline break-all"
-                          >
-                            {img.url}
-                          </a>
-                        )}
-                        {img.attribution && (
-                          <p className="text-xs text-muted-foreground">
-                            {img.attribution}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Footer */}
-          <p className="text-center text-xs text-muted-foreground italic print:mt-8">
-            Draft concept, requires designer review
-          </p>
-        </div>
+        {/* Footer */}
+        <p className="text-center caption-style italic print:mt-8">
+          Draft concept, requires designer review
+        </p>
       </div>
     </div>
   );

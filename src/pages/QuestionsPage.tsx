@@ -84,7 +84,7 @@ const QuestionsPage = () => {
       const [iss, qs] = await Promise.all([getIssues(projectId), getQuestions(projectId)]);
       setIssues(iss || []);
       setQuestions(qs || []);
-      toast.success("Анализ обновлён!");
+      toast.success("Анализ обновлён");
     } catch (e: any) {
       toast.error(e.message || "Ошибка AI-анализа");
     } finally {
@@ -93,134 +93,122 @@ const QuestionsPage = () => {
   };
 
   const getPriorityBadge = (priority: string) => {
-    const config = PRIORITY_CONFIG[priority as keyof typeof PRIORITY_CONFIG];
-    if (!config) return <Badge variant="secondary">{priority}</Badge>;
-    
-    const colorMap = {
-      destructive: "bg-destructive text-destructive-foreground",
-      warning: "bg-warning text-warning-foreground",
-      info: "bg-info text-info-foreground",
+    const variantMap: Record<string, "critical" | "important" | "optional"> = {
+      critical: "critical",
+      important: "important",
+      optional: "optional",
     };
-    
+    const config = PRIORITY_CONFIG[priority as keyof typeof PRIORITY_CONFIG];
     return (
-      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colorMap[config.color]}`}>
-        {config.label}
-      </span>
+      <Badge variant={variantMap[priority] || "optional"}>
+        {config?.label || priority}
+      </Badge>
     );
   };
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-3xl px-4 py-8">
-        {/* Header */}
-        <div className="mb-6 flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(`/project/${projectId}/brief`)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl sm:text-3xl font-display text-foreground">
-              Вопросы и противоречия
-            </h1>
-            <p className="text-sm text-muted-foreground">{project?.name}</p>
-          </div>
+      <header className="border-b border-border bg-background">
+        <div className="mx-auto max-w-content px-12 py-4 flex items-center gap-4">
+          <button
+            onClick={() => navigate(`/project/${projectId}/brief`)}
+            className="text-muted-foreground hover:text-foreground transition-colors duration-350"
+          >
+            <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
+          </button>
+          <span className="font-display text-xl flex-1">Вопросы и противоречия</span>
+          <span className="caption-style">{project?.name}</span>
         </div>
+      </header>
 
+      <div className="mx-auto max-w-content px-12 py-16">
         {/* Contradictions */}
         {issues.length > 0 && (
-          <div className="mb-8">
-            <h2 className="mb-4 flex items-center gap-2 text-xl font-display text-foreground">
-              <AlertTriangle className="h-5 w-5 text-warning" />
+          <section className="mb-16">
+            <h2 className="mb-8 flex items-center gap-3 text-foreground">
+              <AlertTriangle className="h-5 w-5 text-destructive" strokeWidth={1.5} />
               Противоречия
             </h2>
-            <div className="space-y-4">
+            <div className="divide-y divide-border">
               {issues.filter(i => i.type === 'contradiction').map((issue) => (
-                <div
-                  key={issue.id}
-                  className="rounded-lg border border-warning/30 bg-warning/5 p-4"
-                >
-                  <h3 className="font-semibold text-foreground">{issue.title}</h3>
+                <div key={issue.id} className="py-6">
+                  <h3 className="text-foreground">{issue.title}</h3>
                   {issue.evidence && (
-                    <p className="mt-1 text-sm text-muted-foreground italic">
+                    <p className="mt-2 caption-style italic">
                       «{issue.evidence}»
                     </p>
                   )}
                   {issue.impact && (
-                    <p className="mt-2 text-sm text-foreground">{issue.impact}</p>
+                    <p className="mt-2 text-[15px] text-foreground font-light">{issue.impact}</p>
                   )}
                   {issue.suggestion && (
-                    <p className="mt-2 text-sm text-primary font-medium">
-                      💡 {issue.suggestion}
+                    <p className="mt-2 text-[15px] text-primary font-light">
+                      {issue.suggestion}
                     </p>
                   )}
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
         {/* Questions */}
-        <div className="mb-8">
-          <h2 className="mb-4 flex items-center gap-2 text-xl font-display text-foreground">
-            <HelpCircle className="h-5 w-5 text-info" />
+        <section className="mb-16">
+          <h2 className="mb-8 flex items-center gap-3 text-foreground">
+            <HelpCircle className="h-5 w-5 text-primary" strokeWidth={1.5} />
             Уточняющие вопросы
           </h2>
           {questions.length === 0 && !reanalyzing ? (
-            <div className="rounded-lg border border-border bg-card p-8 text-center">
-              <p className="text-muted-foreground">
-                Вопросы появятся после AI-анализа брифа.
+            <div className="py-16 text-center">
+              <p className="font-display text-xl italic text-muted-foreground">
+                Вопросы появятся после AI-анализа брифа
               </p>
               <Button
-                className="mt-4"
+                variant="ghost"
+                className="mt-6"
                 onClick={handleReanalyze}
                 disabled={reanalyzing}
               >
-                <Sparkles className="mr-2 h-4 w-4" />
                 Запустить AI-анализ
               </Button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="divide-y divide-border">
               {questions.map((q) => (
-                <div
-                  key={q.id}
-                  className="rounded-lg border border-border bg-card p-4"
-                >
-                  <div className="flex items-start gap-3">
+                <div key={q.id} className="py-6">
+                  <div className="flex items-start gap-4">
                     <Checkbox
                       checked={q.asked}
                       onCheckedChange={() => handleToggleAsked(q)}
                       className="mt-1"
                     />
                     <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-3 flex-wrap">
                         {getPriorityBadge(q.priority)}
-                        <span className="text-sm font-medium text-foreground">
+                        <span className="text-[15px] font-light text-foreground">
                           {q.text}
                         </span>
                       </div>
                       {q.unlocks && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="caption-style">
                           Разблокирует: {q.unlocks}
                         </p>
                       )}
                       {q.asked && (
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Ответ клиента…"
-                            value={q.answer || ""}
-                            onChange={(e) => handleAnswerChange(q, e.target.value)}
-                            onBlur={() => handleSaveAnswer(q)}
-                            className="text-sm"
-                          />
-                        </div>
+                        <Input
+                          placeholder="Ответ клиента…"
+                          value={q.answer || ""}
+                          onChange={(e) => handleAnswerChange(q, e.target.value)}
+                          onBlur={() => handleSaveAnswer(q)}
+                        />
                       )}
                     </div>
                   </div>
@@ -228,17 +216,17 @@ const QuestionsPage = () => {
               ))}
             </div>
           )}
-        </div>
+        </section>
 
         {/* Actions */}
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="border-t border-border pt-8 flex flex-col gap-4 sm:flex-row">
           <Button
             variant="outline"
             onClick={() => navigate(`/project/${projectId}/brief`)}
             className="flex-1"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Назад к брифу
+            Бриф
           </Button>
           <Button
             variant="outline"

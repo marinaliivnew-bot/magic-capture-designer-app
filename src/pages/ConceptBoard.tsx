@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getBoardBlocks, getProject, getBrief, updateBoardBlock, updateBoardImage, generateBoard } from "@/lib/api";
 import { getRooms } from "@/lib/rooms";
@@ -80,10 +80,9 @@ const ConceptBoard = () => {
 
       await generateBoard(projectId, briefText, context);
       
-      // Reload blocks
       const freshBlocks = await getBoardBlocks(projectId);
       setBlocks(freshBlocks || []);
-      toast.success("Концепт-борд сгенерирован!");
+      toast.success("Концепт-борд сгенерирован");
     } catch (e: any) {
       toast.error(e.message || "Ошибка генерации борда");
       console.error(e);
@@ -99,7 +98,7 @@ const ConceptBoard = () => {
         prev.map((b) => (b.id === blockId ? { ...b, caption } : b))
       );
       setEditingCaption(null);
-      toast.success("Подпись сохранена");
+      toast.success("Сохранено");
     } catch {
       toast.error("Ошибка сохранения");
     }
@@ -126,33 +125,30 @@ const ConceptBoard = () => {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        {/* Header */}
-        <div className="mb-6 flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
+      <header className="border-b border-border bg-background">
+        <div className="mx-auto max-w-content px-12 py-4 flex items-center gap-4">
+          <button
             onClick={() => navigate(`/project/${projectId}/brief`)}
+            className="text-muted-foreground hover:text-foreground transition-colors duration-350"
           >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl sm:text-3xl font-display text-foreground">
-              Концепт-борд
-            </h1>
-            <p className="text-sm text-muted-foreground">{project?.name}</p>
-          </div>
-          <Button
-            onClick={handleGenerate}
-            disabled={generating}
-          >
+            <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
+          </button>
+          <span className="font-display text-xl flex-1">Концепт-борд</span>
+          <span className="caption-style">{project?.name}</span>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-content px-12 py-16">
+        {/* Generate button */}
+        <div className="mb-16 flex justify-end">
+          <Button onClick={handleGenerate} disabled={generating}>
             {generating ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -163,48 +159,106 @@ const ConceptBoard = () => {
         </div>
 
         {blocks.length === 0 && !generating ? (
-          <div className="rounded-lg border border-border bg-card p-12 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-              <ImageIcon className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="mt-4 font-display text-xl text-foreground">
+          <div className="py-24 text-center">
+            <p className="font-display text-2xl italic text-muted-foreground">
               Борд пока пуст
-            </h3>
-            <p className="mt-2 text-muted-foreground">
-              Нажмите «Сгенерировать», чтобы AI создал концепт-борд на основе брифа.
             </p>
-            <Button onClick={handleGenerate} className="mt-4" disabled={generating}>
-              <Sparkles className="mr-2 h-4 w-4" />
+            <Button variant="ghost" className="mt-6" onClick={handleGenerate}>
               Сгенерировать борд
             </Button>
           </div>
         ) : generating ? (
-          <div className="rounded-lg border border-border bg-card p-12 text-center">
-            <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary" />
-            <p className="mt-4 text-muted-foreground">
-              AI генерирует концепт-борд…
-            </p>
+          <div className="py-24 text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+            <p className="mt-6 caption-style">AI генерирует концепт-борд…</p>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="divide-y divide-border">
             {blocks.map((block) => (
-              <BoardBlock
-                key={block.id}
-                block={block}
-                getBlockLabel={getBlockLabel}
-                editingCaption={editingCaption}
-                setEditingCaption={setEditingCaption}
-                editingImageUrl={editingImageUrl}
-                setEditingImageUrl={setEditingImageUrl}
-                onSaveCaption={handleSaveCaption}
-                onReplaceImage={handleReplaceImage}
-              />
+              <div key={block.id} className="py-12">
+                <h3 className="mb-6 text-foreground">
+                  {getBlockLabel(block.block_type)}
+                </h3>
+
+                {/* Images */}
+                <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {block.board_images?.map((img: any) => (
+                    <div key={img.id} className="group relative">
+                      {img.url ? (
+                        <img
+                          src={img.url}
+                          alt={block.caption || ""}
+                          className="aspect-[4/3] w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex aspect-[4/3] w-full items-center justify-center bg-border">
+                          <ImageIcon className="h-8 w-8 text-muted-foreground" strokeWidth={1} />
+                        </div>
+                      )}
+
+                      {img.note && (
+                        <span className="absolute bottom-2 left-2 max-w-[80%] truncate bg-foreground/70 px-2 py-0.5 text-[10px] font-medium text-background">
+                          {img.note}
+                        </span>
+                      )}
+
+                      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity duration-350 group-hover:opacity-100">
+                        <button
+                          className="flex h-7 w-7 items-center justify-center bg-card/90 border border-border text-foreground hover:text-primary transition-colors"
+                          onClick={() =>
+                            setEditingImageUrl(editingImageUrl === img.id ? null : img.id)
+                          }
+                        >
+                          <Pencil className="h-3 w-3" strokeWidth={1.5} />
+                        </button>
+                        {img.source_url && (
+                          <a href={img.source_url} target="_blank" rel="noopener noreferrer">
+                            <span className="flex h-7 w-7 items-center justify-center bg-card/90 border border-border text-foreground hover:text-primary transition-colors">
+                              <ExternalLink className="h-3 w-3" strokeWidth={1.5} />
+                            </span>
+                          </a>
+                        )}
+                      </div>
+
+                      {editingImageUrl === img.id && (
+                        <div className="mt-2">
+                          <Input
+                            placeholder="URL изображения"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleReplaceImage(img.id, (e.target as HTMLInputElement).value);
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Caption */}
+                {editingCaption === block.id ? (
+                  <Textarea
+                    defaultValue={block.caption || ""}
+                    onBlur={(e) => handleSaveCaption(block.id, e.target.value)}
+                    autoFocus
+                  />
+                ) : (
+                  <p
+                    className="cursor-pointer text-[15px] font-light text-muted-foreground hover:text-foreground transition-colors duration-350"
+                    onClick={() => setEditingCaption(block.id)}
+                  >
+                    {block.caption || "Нажмите, чтобы добавить описание..."}
+                  </p>
+                )}
+              </div>
             ))}
           </div>
         )}
 
         {/* Actions */}
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+        <div className="mt-16 border-t border-border pt-8 flex flex-col gap-4 sm:flex-row">
           <Button
             variant="outline"
             onClick={() => navigate(`/project/${projectId}/questions`)}
@@ -225,113 +279,5 @@ const ConceptBoard = () => {
     </div>
   );
 };
-
-function BoardBlock({
-  block,
-  getBlockLabel,
-  editingCaption,
-  setEditingCaption,
-  editingImageUrl,
-  setEditingImageUrl,
-  onSaveCaption,
-  onReplaceImage,
-}: {
-  block: any;
-  getBlockLabel: (type: string) => string;
-  editingCaption: string | null;
-  setEditingCaption: (id: string | null) => void;
-  editingImageUrl: string | null;
-  setEditingImageUrl: (id: string | null) => void;
-  onSaveCaption: (blockId: string, caption: string) => void;
-  onReplaceImage: (imageId: string, url: string) => void;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <h3 className="mb-3 font-display text-lg text-foreground">
-        {getBlockLabel(block.block_type)}
-      </h3>
-
-      {/* Images */}
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {block.board_images?.map((img: any) => (
-          <div key={img.id} className="group relative">
-            {img.url ? (
-              <img
-                src={img.url}
-                alt={block.caption || ""}
-                className="h-48 w-full rounded-lg object-cover"
-                loading="lazy"
-              />
-            ) : (
-              <div className="flex h-48 w-full items-center justify-center rounded-lg bg-muted">
-                <ImageIcon className="h-10 w-10 text-muted-foreground" />
-              </div>
-            )}
-
-            {/* Note (search query) */}
-            {img.note && (
-              <span className="absolute bottom-2 left-2 max-w-[80%] truncate rounded-full bg-foreground/70 px-2 py-0.5 text-[10px] font-medium text-background">
-                {img.note}
-              </span>
-            )}
-
-            {/* Replace controls */}
-            <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-              <Button
-                size="icon"
-                variant="secondary"
-                className="h-7 w-7"
-                onClick={() =>
-                  setEditingImageUrl(
-                    editingImageUrl === img.id ? null : img.id
-                  )
-                }
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-              {img.source_url && (
-                <a href={img.source_url} target="_blank" rel="noopener noreferrer">
-                  <Button size="icon" variant="secondary" className="h-7 w-7">
-                    <ExternalLink className="h-3 w-3" />
-                  </Button>
-                </a>
-              )}
-            </div>
-
-            {editingImageUrl === img.id && (
-              <div className="mt-2">
-                <Input
-                  placeholder="Вставьте URL изображения"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      onReplaceImage(img.id, (e.target as HTMLInputElement).value);
-                    }
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Caption */}
-      {editingCaption === block.id ? (
-        <Textarea
-          defaultValue={block.caption || ""}
-          className="text-sm"
-          onBlur={(e) => onSaveCaption(block.id, e.target.value)}
-          autoFocus
-        />
-      ) : (
-        <p
-          className="cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors"
-          onClick={() => setEditingCaption(block.id)}
-        >
-          {block.caption || "Нажмите, чтобы добавить подпись..."}
-        </p>
-      )}
-    </div>
-  );
-}
 
 export default ConceptBoard;

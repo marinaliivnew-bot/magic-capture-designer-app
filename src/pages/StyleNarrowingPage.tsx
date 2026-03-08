@@ -37,14 +37,12 @@ const StyleNarrowingPage = () => {
   const [loadingImages, setLoadingImages] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Load all images once
   useEffect(() => {
     const allCards: StyleCardDef[] = [
       ...STYLE_CARDS,
       ...COLOR_CARDS,
       ...MATERIAL_CARDS,
     ];
-    // Deduplicate by key
     const queries: Record<string, string> = {};
     allCards.forEach((c) => {
       queries[c.key] = c.query;
@@ -68,7 +66,7 @@ const StyleNarrowingPage = () => {
         setImages(data.images || {});
       } catch (e) {
         console.error("Error fetching style images:", e);
-        toast.error("Не удалось загрузить изображения стилей");
+        toast.error("Не удалось загрузить изображения");
       } finally {
         setLoadingImages(false);
       }
@@ -87,7 +85,6 @@ const StyleNarrowingPage = () => {
           return { ...prev, [stepKey]: current.filter((k) => k !== key) };
         }
         if (current.length >= currentStep.max) {
-          // Replace last if at max
           if (currentStep.max === 1) {
             return { ...prev, [stepKey]: [key] };
           }
@@ -140,7 +137,7 @@ const StyleNarrowingPage = () => {
         style_dislikes: dislikes,
       });
 
-      toast.success("Стилевые предпочтения сохранены!");
+      toast.success("Стилевые предпочтения сохранены");
       navigate(`/project/${projectId}/brief`);
     } catch (e) {
       toast.error("Ошибка сохранения");
@@ -158,53 +155,51 @@ const StyleNarrowingPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        {/* Header */}
-        <div className="mb-6 flex items-center gap-3">
+      <header className="border-b border-border bg-background">
+        <div className="mx-auto max-w-content px-12 py-4 flex items-center gap-4">
           {step > 0 ? (
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate(`/project/${projectId}/brief`)}
+            <button
+              onClick={handleBack}
+              className="text-muted-foreground hover:text-foreground transition-colors duration-350"
             >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
+              <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate(`/project/${projectId}/brief`)}
+              className="text-muted-foreground hover:text-foreground transition-colors duration-350"
+            >
+              <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
+            </button>
           )}
-          <div className="flex-1">
-            <h1 className="text-2xl sm:text-3xl font-display text-foreground">
-              {currentStep.title}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {currentStep.subtitle}
-            </p>
-          </div>
-          <Button variant="ghost" onClick={handleSkip} className="text-muted-foreground">
-            <SkipForward className="mr-1.5 h-4 w-4" />
+          <span className="font-display text-xl flex-1">{currentStep.title}</span>
+          <Button variant="ghost" onClick={handleSkip}>
             Пропустить
           </Button>
         </div>
+      </header>
+
+      <div className="mx-auto max-w-content px-12 py-16">
+        {/* Subtitle */}
+        <p className="caption-style mb-8">{currentStep.subtitle}</p>
 
         {/* Progress */}
-        <div className="mb-8">
-          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Шаг {step + 1} из {STEPS.length}</span>
-            <span>{Math.round(progress)}%</span>
+        <div className="mb-12">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="label-style text-muted-foreground">Шаг {step + 1} из {STEPS.length}</span>
+            <span className="label-style text-primary">{Math.round(progress)}%</span>
           </div>
-          <Progress value={progress} className="h-1.5" />
+          <Progress value={progress} />
         </div>
 
         {/* Cards grid */}
         {loadingImages ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-3 text-muted-foreground">Загружаю изображения…</span>
+          <div className="flex items-center justify-center py-24">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <span className="ml-3 caption-style">Загружаю изображения…</span>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-6 sm:grid-cols-3">
             {currentStep.cards.map((card) => (
               <StyleCard
                 key={card.key}
@@ -219,9 +214,9 @@ const StyleNarrowingPage = () => {
         )}
 
         {/* Actions */}
-        <div className="mt-8 flex gap-3">
+        <div className="mt-16 border-t border-border pt-8 flex gap-4">
           {step > 0 && (
-            <Button variant="outline" onClick={handleBack} className="flex-1 sm:flex-none">
+            <Button variant="outline" onClick={handleBack}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Назад
             </Button>
