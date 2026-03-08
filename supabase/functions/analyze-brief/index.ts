@@ -26,7 +26,7 @@ serve(async (req) => {
   }
 
   try {
-    const { briefText, projectContext } = await req.json();
+    const { briefText, projectContext, userRefs } = await req.json();
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) {
@@ -36,11 +36,15 @@ serve(async (req) => {
       );
     }
 
+    const refsBlock = Array.isArray(userRefs) && userRefs.length > 0
+      ? `\n\n## Пользовательские референсы\nПользователь загрузил свои референсы. Учитывай это при формировании style_likes.\n${userRefs.map((r: { url: string; step?: string }) => `- [${r.step || "ref"}] ${r.url}`).join("\n")}`
+      : "";
+
     const userPrompt = `## Контекст проекта
 ${projectContext || "Не указан"}
 
 ## Бриф
-${briefText}`;
+${briefText}${refsBlock}`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
