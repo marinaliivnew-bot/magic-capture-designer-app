@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, AlertTriangle, HelpCircle, ArrowRight, Sparkles, RotateCcw } from "lucide-react";
+import { ArrowLeft, Loader2, AlertTriangle, HelpCircle, ArrowRight, Sparkles, RotateCcw, Download } from "lucide-react";
 
 const QuestionsPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
