@@ -13,6 +13,7 @@ const QuestionsPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
+  const [brief, setBrief] = useState<any>(null);
   const [issues, setIssues] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
