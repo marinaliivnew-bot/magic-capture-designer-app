@@ -25,16 +25,18 @@ const QuestionsPage = () => {
     if (!projectId) return;
     const load = async () => {
       try {
-        const [p, b, iss, qs] = await Promise.all([
+        const [p, b, iss, qs, rms] = await Promise.all([
           getProject(projectId),
           getBrief(projectId),
           getIssues(projectId),
           getQuestions(projectId),
+          getRooms(projectId),
         ]);
         setProject(p);
         setBrief(b);
         setIssues(iss || []);
         setQuestions(qs || []);
+        setRooms(rms || []);
       } catch (e) {
         console.error(e);
       } finally {
