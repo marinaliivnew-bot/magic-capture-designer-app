@@ -9,14 +9,12 @@ const corsHeaders = {
 
 const BUCKET = "style-images";
 
-// Tags/descriptions that indicate the photo contains people prominently
 const PEOPLE_KEYWORDS = [
   "portrait", "woman", "man", "girl", "boy", "person", "people",
   "model", "fashion", "couple", "family", "child", "baby", "face",
   "selfie", "wedding", "bride", "groom",
 ];
 
-// Tags that indicate the photo is actually an interior
 const INTERIOR_KEYWORDS = [
   "interior", "room", "living", "bedroom", "kitchen", "bathroom",
   "furniture", "sofa", "chair", "table", "lamp", "decor", "design",
@@ -42,7 +40,6 @@ function interiorScore(photo: any): number {
   for (const kw of INTERIOR_KEYWORDS) {
     if (allText.includes(kw)) score++;
   }
-  // Prefer landscape aspect ratio (width > height)
   if (photo.width && photo.height && photo.width > photo.height) {
     score += 2;
   }
@@ -51,17 +48,30 @@ function interiorScore(photo: any): number {
 
 function pickBestPhoto(photos: any[]): any | null {
   if (!photos || photos.length === 0) return null;
-
-  // Filter out photos with people
   const filtered = photos.filter((p) => !hasPeople(p));
-
-  // If all filtered out, use originals but still try to pick best
   const candidates = filtered.length > 0 ? filtered : photos;
-
-  // Sort by interior relevance score (descending)
   candidates.sort((a, b) => interiorScore(b) - interiorScore(a));
-
   return candidates[0];
+}
+
+function simplifyQuery(query: string): string | null {
+  const words = query.trim().split(/\s+/);
+  if (words.length <= 2) return null;
+  const keepCount = Math.max(2, Math.ceil(words.length * 0.6));
+  return words.slice(0, keepCount).join(" ");
+}
+
+async function fetchFromUnsplash(query: string, accessKey: string): Promise<any | null> {
+  const resp = await fetch(
+    `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=10&orientation=landscape&content_filter=high`,
+    { headers: { Authorization: `Client-ID ${accessKey}` } }
+  );
+  if (!resp.ok) {
+    console.error(`Unsplash error for "${query}":`, resp.status);
+    return null;
+  }
+  const data = await resp.json();
+  return pickBestPhoto(data.results);
 }
 
 serve(async (req) => {
@@ -103,22 +113,29 @@ serve(async (req) => {
         continue;
       }
 
-      // Fetch 10 photos from Unsplash for better selection
-      const unsplashResp = await fetch(
-        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=10&orientation=landscape&content_filter=high`,
-        {
-          headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` },
+      // Try original query, then progressively simplified versions
+      let photo: any = null;
+      let currentQuery: string | null = query;
+
+      while (!photo && currentQuery) {
+        photo = await fetchFromUnsplash(currentQuery, UNSPLASH_ACCESS_KEY);
+        if (!photo) {
+          const simpler = simplifyQuery(currentQuery);
+          if (simpler && simpler !== currentQuery) {
+            console.log(`Retrying "${key}": "${currentQuery}" → "${simpler}"`);
+            currentQuery = simpler;
+          } else {
+            // Last resort: generic fallback with "interior" appended
+            const words = (query as string).split(/\s+/).slice(0, 2);
+            const genericFallback = words.join(" ") + " interior";
+            if (genericFallback !== currentQuery) {
+              console.log(`Generic fallback "${key}": "${genericFallback}"`);
+              photo = await fetchFromUnsplash(genericFallback, UNSPLASH_ACCESS_KEY);
+            }
+            break;
+          }
         }
-      );
-
-      if (!unsplashResp.ok) {
-        console.error(`Unsplash error for "${key}":`, unsplashResp.status);
-        results[key] = { url: "", attribution: "" };
-        continue;
       }
-
-      const unsplashData = await unsplashResp.json();
-      const photo = pickBestPhoto(unsplashData.results);
 
       if (!photo) {
         results[key] = { url: "", attribution: "" };
