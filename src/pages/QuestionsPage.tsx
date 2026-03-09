@@ -95,6 +95,41 @@ const QuestionsPage = () => {
     }
   };
 
+  const handleExportBriefPDF = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.info("Используйте Ctrl+P / Cmd+P для сохранения в PDF");
+      return;
+    }
+
+    const contradictions = issues.filter((i) => i.type === "contradiction");
+
+    const briefHtml = BRIEF_SECTIONS.map(
+      ({ key, label }) =>
+        `<div style="margin-bottom:20px;"><h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin:0 0 6px;">${label}</h3><p style="font-size:15px;line-height:1.6;margin:0;color:#333;">${(brief as any)?.[key] || "не указано"}</p></div>`
+    ).join("");
+
+    const contradictionsHtml = contradictions.length > 0
+      ? `<h2 style="font-size:20px;margin:40px 0 16px;border-top:1px solid #ddd;padding-top:24px;">Противоречия</h2>` +
+        contradictions.map(
+          (issue) =>
+            `<div style="margin-bottom:16px;padding-left:16px;border-left:3px solid #c44;"><h3 style="font-size:15px;margin:0 0 4px;color:#c44;">${issue.title}</h3>${issue.evidence ? `<p style="font-size:13px;color:#888;font-style:italic;margin:4px 0;">«${issue.evidence}»</p>` : ""}${issue.suggestion ? `<p style="font-size:14px;color:#8a6d3b;margin:4px 0;">${issue.suggestion}</p>` : ""}</div>`
+        ).join("")
+      : "";
+
+    const questionsHtml = questions.length > 0
+      ? `<h2 style="font-size:20px;margin:40px 0 16px;border-top:1px solid #ddd;padding-top:24px;">Уточняющие вопросы</h2>` +
+        questions.map(
+          (q) =>
+            `<div style="margin-bottom:12px;"><span style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;padding:2px 8px;border:1px solid #999;border-radius:3px;margin-right:8px;">${PRIORITY_CONFIG[q.priority as keyof typeof PRIORITY_CONFIG]?.label || q.priority}</span><span style="font-size:15px;">${q.text}</span>${q.answer ? `<p style="font-size:14px;color:#8a6d3b;margin:4px 0 0 0;">Ответ: ${q.answer}</p>` : ""}${q.unlocks ? `<p style="font-size:13px;color:#888;margin:2px 0 0 0;">Разблокирует: ${q.unlocks}</p>` : ""}</div>`
+        ).join("")
+      : "";
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${project?.name || "Бриф"}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:700px;margin:40px auto;padding:0 24px;color:#222;}h1{font-size:28px;font-weight:300;margin-bottom:4px;}@media print{body{margin:20px auto;}}</style></head><body><h1>${project?.name || "Проект"}</h1><p style="font-size:13px;color:#888;margin-bottom:32px;">${new Date().toLocaleDateString("ru-RU")}</p><h2 style="font-size:20px;margin-bottom:16px;">Бриф</h2>${briefHtml}${contradictionsHtml}${questionsHtml}<p style="text-align:center;font-size:12px;color:#aaa;margin-top:48px;font-style:italic;">Документ сформирован автоматически</p></body></html>`);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 400);
+  };
+
   const getPriorityBadge = (priority: string) => {
     const variantMap: Record<string, "critical" | "important" | "optional"> = {
       critical: "critical",
