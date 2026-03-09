@@ -23,12 +23,14 @@ const QuestionsPage = () => {
     if (!projectId) return;
     const load = async () => {
       try {
-        const [p, iss, qs] = await Promise.all([
+        const [p, b, iss, qs] = await Promise.all([
           getProject(projectId),
+          getBrief(projectId),
           getIssues(projectId),
           getQuestions(projectId),
         ]);
         setProject(p);
+        setBrief(b);
         setIssues(iss || []);
         setQuestions(qs || []);
       } catch (e) {
