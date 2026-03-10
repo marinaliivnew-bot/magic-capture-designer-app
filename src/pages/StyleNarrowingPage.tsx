@@ -136,6 +136,10 @@ const StyleNarrowingPage = () => {
     if (!projectId) return;
     setSaving(true);
     try {
+      // Read existing brief to append, not overwrite
+      const { getBrief } = await import("@/lib/api");
+      const existingBrief = await getBrief(projectId);
+
       const likes: string[] = [];
       if (selections.styles.length)
         likes.push(`Стили: ${selections.styles.map(getLabel).join(", ")}`);
@@ -144,9 +148,21 @@ const StyleNarrowingPage = () => {
       if (selections.materials.length)
         likes.push(`Материалы: ${selections.materials.map(getLabel).join(", ")}`);
 
+      const newLikes = likes.join("\n");
       const dislikes = selections.dislikes.length
         ? selections.dislikes.map(getLabel).join(", ")
         : "";
+
+      // Append to existing values
+      const existingLikes = (existingBrief as any)?.style_likes || "";
+      const existingDislikes = (existingBrief as any)?.style_dislikes || "";
+
+      const mergedLikes = existingLikes
+        ? `${existingLikes}\n${newLikes}`
+        : newLikes;
+      const mergedDislikes = existingDislikes
+        ? `${existingDislikes}\n${dislikes}`
+        : dislikes;
 
       const refsPayload = userRefs.map((r) => ({
         url: r.url,
@@ -155,8 +171,8 @@ const StyleNarrowingPage = () => {
       }));
 
       await upsertBrief(projectId, {
-        style_likes: likes.join("\n"),
-        style_dislikes: dislikes,
+        style_likes: mergedLikes,
+        style_dislikes: mergedDislikes,
         user_refs: refsPayload,
       });
 
