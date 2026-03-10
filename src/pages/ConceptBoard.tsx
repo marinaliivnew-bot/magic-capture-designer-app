@@ -1,27 +1,34 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getBoardBlocks, getProject, getBrief, updateBoardBlock, updateBoardImage, generateBoard } from "@/lib/api";
+import { getBoardBlocks, getProject, getBrief, getIssues, getQuestions, updateBoardBlock, updateBoardImage, generateBoard } from "@/lib/api";
 import { getRooms } from "@/lib/rooms";
 import { BOARD_BLOCK_TYPES, BRIEF_SECTIONS, ROOM_TYPES } from "@/lib/constants";
+import { generateFullPDF } from "@/lib/pdf-export";
+import ProjectHeader from "@/components/ProjectHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   Loader2,
   FileDown,
   ImageIcon,
   Pencil,
   ExternalLink,
   Sparkles,
+  ArrowLeft,
+  Download,
 } from "lucide-react";
 
 const ConceptBoard = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
+  const [brief, setBrief] = useState<any>(null);
   const [blocks, setBlocks] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [issues, setIssues] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [editingCaption, setEditingCaption] = useState<string | null>(null);
@@ -30,12 +37,20 @@ const ConceptBoard = () => {
   const loadData = async () => {
     if (!projectId) return;
     try {
-      const [p, b] = await Promise.all([
+      const [p, b, bb, rms, iss, qs] = await Promise.all([
         getProject(projectId),
+        getBrief(projectId),
         getBoardBlocks(projectId),
+        getRooms(projectId),
+        getIssues(projectId),
+        getQuestions(projectId),
       ]);
       setProject(p);
-      setBlocks(b || []);
+      setBrief(b);
+      setBlocks(bb || []);
+      setRooms(rms || []);
+      setIssues(iss || []);
+      setQuestions(qs || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -54,19 +69,19 @@ const ConceptBoard = () => {
     if (!projectId) return;
     setGenerating(true);
     try {
-      const [brief, rooms] = await Promise.all([
+      const [freshBrief, freshRooms] = await Promise.all([
         getBrief(projectId),
         getRooms(projectId),
       ]);
 
-      const briefText = brief
+      const briefText = freshBrief
         ? BRIEF_SECTIONS.map(
-            ({ key, label }) => `### ${label}\n${(brief as any)[key] || "(пусто)"}`
+            ({ key, label }) => `### ${label}\n${(freshBrief as any)[key] || "(пусто)"}`
           ).join("\n\n")
         : "(бриф не заполнен)";
 
-      const roomsContext = rooms && rooms.length > 0
-        ? rooms.map((r: any) => {
+      const roomsContext = freshRooms && freshRooms.length > 0
+        ? freshRooms.map((r: any) => {
             const typeLabel = ROOM_TYPES.find(t => t.value === r.room_type)?.label || r.room_type;
             let line = `- ${r.name} (${typeLabel})`;
             if (r.dimensions_text) line += `, размеры: ${r.dimensions_text}`;
@@ -76,7 +91,14 @@ const ConceptBoard = () => {
 
       const planNote = project?.plan_url ? `\nПлан помещения: ${project.plan_url}` : "";
       const descNote = project?.rooms_description ? `\nОписание: ${project.rooms_description}` : "";
-      const context = `Помещения:\n${roomsContext}${descNote}${planNote}\nЗаметки: ${project?.raw_input || "нет"}`;
+      
+      const usersInfo = (freshBrief as any)?.users_of_space ? `\nСостав семьи и пользователи: ${(freshBrief as any).users_of_space}` : "";
+      const scenariosInfo = (freshBrief as any)?.scenarios ? `\nСценарии: ${(freshBrief as any).scenarios}` : "";
+      const styleLikes = (freshBrief as any)?.style_likes ? `\nСтилевые предпочтения: ${(freshBrief as any).style_likes}` : "";
+      const styleDislikes = (freshBrief as any)?.style_dislikes ? `\nАнтипатии: ${(freshBrief as any).style_dislikes}` : "";
+      const constraintsPractical = (freshBrief as any)?.constraints_practical ? `\nОграничения: ${(freshBrief as any).constraints_practical}` : "";
+      
+      const context = `Помещения проекта:\n${roomsContext}${descNote}${planNote}${usersInfo}${scenariosInfo}${styleLikes}${styleDislikes}${constraintsPractical}\nЗаметки: ${project?.raw_input || "нет"}`;
 
       await generateBoard(projectId, briefText, context);
       
@@ -122,6 +144,11 @@ const ConceptBoard = () => {
     }
   };
 
+  const handleExportPDF = () => {
+    const ok = generateFullPDF({ project, brief, rooms, issues, questions, blocks });
+    if (!ok) toast.info("Используйте Ctrl+P / Cmd+P для сохранения в PDF");
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -132,18 +159,17 @@ const ConceptBoard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-background">
-        <div className="mx-auto max-w-content px-12 py-4 flex items-center gap-4">
-          <button
-            onClick={() => navigate(`/project/${projectId}/brief`)}
-            className="text-muted-foreground hover:text-foreground transition-colors duration-350"
-          >
-            <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
-          </button>
-          <span className="font-display text-xl flex-1">Концепт-борд</span>
-          <span className="caption-style">{project?.name}</span>
-        </div>
-      </header>
+      <ProjectHeader
+        projectId={projectId!}
+        currentStep="board"
+        title="Концепт-борд"
+        projectName={project?.name}
+      >
+        <Button onClick={handleExportPDF} variant="outline" size="sm">
+          <Download className="mr-2 h-4 w-4" />
+          PDF
+        </Button>
+      </ProjectHeader>
 
       <div className="mx-auto max-w-content px-12 py-16">
         {/* Generate button */}

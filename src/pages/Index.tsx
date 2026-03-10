@@ -41,7 +41,7 @@ const Index = () => {
       {/* Header */}
       <header className="border-b border-border bg-background">
         <div className="mx-auto max-w-content px-12 py-4 flex items-center justify-between">
-          <span className="font-display text-xl">Brief → Concept</span>
+          <a href="/" className="font-display text-xl text-foreground hover:text-primary transition-colors duration-350">Brief → Concept</a>
           <nav className="label-style text-muted-foreground">
             Интерьерный бриф
           </nav>

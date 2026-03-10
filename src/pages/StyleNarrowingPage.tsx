@@ -136,6 +136,10 @@ const StyleNarrowingPage = () => {
     if (!projectId) return;
     setSaving(true);
     try {
+      // Read existing brief to append, not overwrite
+      const { getBrief } = await import("@/lib/api");
+      const existingBrief = await getBrief(projectId);
+
       const likes: string[] = [];
       if (selections.styles.length)
         likes.push(`Стили: ${selections.styles.map(getLabel).join(", ")}`);
@@ -144,9 +148,21 @@ const StyleNarrowingPage = () => {
       if (selections.materials.length)
         likes.push(`Материалы: ${selections.materials.map(getLabel).join(", ")}`);
 
+      const newLikes = likes.join("\n");
       const dislikes = selections.dislikes.length
         ? selections.dislikes.map(getLabel).join(", ")
         : "";
+
+      // Append to existing values
+      const existingLikes = (existingBrief as any)?.style_likes || "";
+      const existingDislikes = (existingBrief as any)?.style_dislikes || "";
+
+      const mergedLikes = existingLikes
+        ? `${existingLikes}\n${newLikes}`
+        : newLikes;
+      const mergedDislikes = existingDislikes
+        ? `${existingDislikes}\n${dislikes}`
+        : dislikes;
 
       const refsPayload = userRefs.map((r) => ({
         url: r.url,
@@ -155,8 +171,8 @@ const StyleNarrowingPage = () => {
       }));
 
       await upsertBrief(projectId, {
-        style_likes: likes.join("\n"),
-        style_dislikes: dislikes,
+        style_likes: mergedLikes,
+        style_dislikes: mergedDislikes,
         user_refs: refsPayload,
       });
 
@@ -179,26 +195,42 @@ const StyleNarrowingPage = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-background">
-        <div className="mx-auto max-w-content px-12 py-4 flex items-center gap-4">
-          {step > 0 ? (
-            <button
-              onClick={handleBack}
-              className="text-muted-foreground hover:text-foreground transition-colors duration-350"
+        <div className="mx-auto max-w-content px-12 py-4 flex flex-col gap-2">
+          <div className="flex items-center gap-4">
+            <a
+              href="/"
+              className="font-display text-lg text-foreground hover:text-primary transition-colors duration-350 shrink-0"
             >
-              <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
-            </button>
-          ) : (
-            <button
-              onClick={() => navigate(`/project/${projectId}/brief`)}
-              className="text-muted-foreground hover:text-foreground transition-colors duration-350"
-            >
-              <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
-            </button>
+              Brief → Concept
+            </a>
+            <span className="text-muted-foreground text-[11px]">|</span>
+            {step > 0 ? (
+              <button
+                onClick={handleBack}
+                className="text-muted-foreground hover:text-foreground transition-colors duration-350"
+              >
+                <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate(`/project/${projectId}/brief`)}
+                className="text-muted-foreground hover:text-foreground transition-colors duration-350"
+              >
+                <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
+              </button>
+            )}
+            <span className="font-display text-xl flex-1">{currentStep.title}</span>
+            <Button variant="ghost" onClick={handleSkip}>
+              Пропустить
+            </Button>
+          </div>
+          {projectId && (
+            <nav className="flex items-center gap-1 text-[11px] font-body font-medium uppercase tracking-[0.1em]">
+              <span className="text-muted-foreground">Ввод → </span>
+              <span className="text-primary">Стиль</span>
+              <span className="text-muted-foreground"> → Бриф → Вопросы → Борд → Экспорт</span>
+            </nav>
           )}
-          <span className="font-display text-xl flex-1">{currentStep.title}</span>
-          <Button variant="ghost" onClick={handleSkip}>
-            Пропустить
-          </Button>
         </div>
       </header>
 
