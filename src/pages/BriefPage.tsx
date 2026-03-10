@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useParams, useNavigate } from "react-router-dom";
-import { getBrief, getProject, upsertBrief, analyzeBrief } from "@/lib/api";
+import { getBrief, getProject, upsertBrief, analyzeBrief, getBoardBlocks, getIssues, getQuestions } from "@/lib/api";
 import { getRooms } from "@/lib/rooms";
 import { BRIEF_SECTIONS, ROOM_TYPES } from "@/lib/constants";
+import { generateFullPDF } from "@/lib/pdf-export";
+import ProjectHeader from "@/components/ProjectHeader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress, getProgressTextColor } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { ArrowLeft, Search, LayoutGrid, Save, Loader2, Sparkles, Settings } from "lucide-react";
+import { Search, LayoutGrid, Save, Loader2, Sparkles, Settings, Palette, Download } from "lucide-react";
 
 const BriefPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -74,6 +76,32 @@ const BriefPage = () => {
     }
   };
 
+  const handleExportPDF = async () => {
+    if (!projectId) return;
+    try {
+      const [iss, qs, bb] = await Promise.all([
+        getIssues(projectId),
+        getQuestions(projectId),
+        getBoardBlocks(projectId),
+      ]);
+      const briefData = {} as any;
+      BRIEF_SECTIONS.forEach(({ key }) => {
+        briefData[key] = brief[key] || "";
+      });
+      const ok = generateFullPDF({
+        project,
+        brief: briefData,
+        rooms,
+        issues: iss || [],
+        questions: qs || [],
+        blocks: bb || [],
+      });
+      if (!ok) toast.info("Используйте Ctrl+P / Cmd+P для сохранения в PDF");
+    } catch (e) {
+      toast.error("Ошибка экспорта");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -84,25 +112,23 @@ const BriefPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-background">
-        <div className="mx-auto max-w-content px-12 py-4 flex items-center gap-4">
-          <button
-            onClick={() => navigate("/")}
-            className="text-muted-foreground hover:text-foreground transition-colors duration-350"
-          >
-            <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
-          </button>
-          <span className="font-display text-xl flex-1">{project?.name || "Бриф"}</span>
-          <button
-            onClick={() => navigate(`/project/${projectId}/edit`)}
-            className="text-muted-foreground hover:text-foreground transition-colors duration-350"
-            title="Редактировать проект"
-          >
-            <Settings className="h-5 w-5" strokeWidth={1.5} />
-          </button>
-        </div>
-      </header>
+      <ProjectHeader
+        projectId={projectId!}
+        currentStep="brief"
+        title={project?.name || "Бриф"}
+      >
+        <button
+          onClick={() => navigate(`/project/${projectId}/edit`)}
+          className="text-muted-foreground hover:text-foreground transition-colors duration-350"
+          title="Редактировать проект"
+        >
+          <Settings className="h-5 w-5" strokeWidth={1.5} />
+        </button>
+        <Button onClick={handleExportPDF} variant="outline" size="sm">
+          <Download className="mr-2 h-4 w-4" />
+          PDF
+        </Button>
+      </ProjectHeader>
 
       <div className="mx-auto max-w-content px-12 py-16">
         {/* Completeness */}
@@ -118,9 +144,22 @@ const BriefPage = () => {
         <div className="divide-y divide-border">
           {BRIEF_SECTIONS.map(({ key, label, description }) => (
             <div key={key} className="py-8">
-              <label className="label-style text-foreground block mb-1">
-                {label}
-              </label>
+              <div className="flex items-center gap-3 mb-1">
+                <label className="label-style text-foreground block">
+                  {label}
+                </label>
+                {(key === "style_likes" || key === "style_dislikes") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(`/project/${projectId}/style`)}
+                    className="text-[10px] px-2 py-1 h-auto"
+                  >
+                    <Palette className="mr-1 h-3 w-3" />
+                    Пройти Style Narrowing
+                  </Button>
+                )}
+              </div>
               <p className="caption-style mb-4">{description}</p>
               <Textarea
                 placeholder={`${label.toLowerCase()}...`}

@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getProject, getBrief, getIssues, getQuestions, getBoardBlocks } from "@/lib/api";
-import { BRIEF_SECTIONS, BOARD_BLOCK_TYPES } from "@/lib/constants";
+import { getRooms } from "@/lib/rooms";
+import { BRIEF_SECTIONS, BOARD_BLOCK_TYPES, PRIORITY_CONFIG } from "@/lib/constants";
+import { generateFullPDF } from "@/lib/pdf-export";
+import ProjectHeader from "@/components/ProjectHeader";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Download } from "lucide-react";
+import { Loader2, Download } from "lucide-react";
 
 const ExportPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -14,24 +17,27 @@ const ExportPage = () => {
   const [issues, setIssues] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
   const [blocks, setBlocks] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!projectId) return;
     const load = async () => {
       try {
-        const [p, b, iss, qs, bb] = await Promise.all([
+        const [p, b, iss, qs, bb, rms] = await Promise.all([
           getProject(projectId),
           getBrief(projectId),
           getIssues(projectId),
           getQuestions(projectId),
           getBoardBlocks(projectId),
+          getRooms(projectId),
         ]);
         setProject(p);
         setBrief(b);
         setIssues(iss || []);
         setQuestions(qs || []);
         setBlocks(bb || []);
+        setRooms(rms || []);
       } catch (e) {
         console.error(e);
       } finally {
@@ -42,8 +48,10 @@ const ExportPage = () => {
   }, [projectId]);
 
   const handleExportPDF = () => {
-    toast.info("Используйте Ctrl+P / Cmd+P для сохранения в PDF");
-    setTimeout(() => window.print(), 300);
+    const ok = generateFullPDF({ project, brief, rooms, issues, questions, blocks });
+    if (!ok) {
+      toast.info("Используйте Ctrl+P / Cmd+P для сохранения в PDF");
+    }
   };
 
   const getBlockLabel = (type: string) =>
@@ -59,22 +67,17 @@ const ExportPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation (hidden in print) */}
-      <header className="border-b border-border bg-background print:hidden">
-        <div className="mx-auto max-w-content px-12 py-4 flex items-center gap-4">
-          <button
-            onClick={() => navigate(`/project/${projectId}/board`)}
-            className="text-muted-foreground hover:text-foreground transition-colors duration-350"
-          >
-            <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
-          </button>
-          <span className="font-display text-xl flex-1">Экспорт</span>
-          <Button onClick={handleExportPDF} size="sm">
-            <Download className="mr-2 h-4 w-4" />
-            Скачать PDF
-          </Button>
-        </div>
-      </header>
+      <ProjectHeader
+        projectId={projectId!}
+        currentStep="export"
+        title="Экспорт"
+        projectName={project?.name}
+      >
+        <Button onClick={handleExportPDF} size="sm">
+          <Download className="mr-2 h-4 w-4" />
+          Скачать PDF
+        </Button>
+      </ProjectHeader>
 
       <div className="mx-auto max-w-content px-12 py-16">
         {/* Title */}
@@ -130,7 +133,7 @@ const ExportPage = () => {
               {questions.map((q) => (
                 <div key={q.id} className="py-4 print:py-2">
                   <div className="flex items-center gap-3">
-                    <span className="label-style text-muted-foreground">[{q.priority}]</span>
+                    <span className="label-style text-muted-foreground">[{PRIORITY_CONFIG[q.priority as keyof typeof PRIORITY_CONFIG]?.label || q.priority}]</span>
                     <span className="text-[15px] font-light text-foreground">{q.text}</span>
                   </div>
                   {q.answer && (
