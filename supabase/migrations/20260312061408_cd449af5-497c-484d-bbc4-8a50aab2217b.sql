@@ -1,0 +1,1 @@
+ALTER TABLE public.briefs ADD COLUMN IF NOT EXISTS style_narrowing_result jsonb DEFAULT NULL;

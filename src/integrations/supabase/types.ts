@@ -101,6 +101,7 @@ export type Database = {
           storage: string | null
           style_dislikes: string | null
           style_likes: string | null
+          style_narrowing_result: Json | null
           success_criteria: string | null
           updated_at: string
           user_refs: Json | null
@@ -117,6 +118,7 @@ export type Database = {
           storage?: string | null
           style_dislikes?: string | null
           style_likes?: string | null
+          style_narrowing_result?: Json | null
           success_criteria?: string | null
           updated_at?: string
           user_refs?: Json | null
@@ -133,6 +135,7 @@ export type Database = {
           storage?: string | null
           style_dislikes?: string | null
           style_likes?: string | null
+          style_narrowing_result?: Json | null
           success_criteria?: string | null
           updated_at?: string
           user_refs?: Json | null
