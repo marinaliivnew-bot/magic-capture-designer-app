@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createProject } from "@/lib/api";
 import { saveRooms, uploadPlanFile } from "@/lib/rooms";
@@ -7,8 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { toast } from "sonner";
-import { Loader2, Sparkles, Plus, Upload, X, FileText, Image as ImageIcon } from "lucide-react";
+import { Loader2, Sparkles, Plus, Upload, X, FileText, Image as ImageIcon, ChevronDown, Scan } from "lucide-react";
+
+const DRAFT_KEY = "draft_project";
 
 function makeRoom(): RoomData {
   return {
@@ -19,28 +22,73 @@ function makeRoom(): RoomData {
   };
 }
 
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+const RAW_INPUT_PLACEHOLDER = `Вставьте сюда любые данные о клиенте и проекте в любом формате:
+• переписку из мессенджера (WhatsApp, Telegram)
+• свои заметки после встречи
+• транскрипт голосового сообщения (текст)
+• пожелания клиента, записанные своими словами
+• ссылки на референсы (Pinterest, Houzz и др.)
+
+Пример: "Клиент хочет светлую спальню, не любит серый. Есть кот.
+Бюджет около 300 тыс. Любит скандинавский стиль, видела у подруги."`;
+
 const NewProject = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const draft = loadDraft();
 
   const [form, setForm] = useState({
-    name: "",
-    raw_input: "",
-    budget: "",
-    timeline: "",
-    taboos: "",
-    must_haves: "",
-    nice_to_haves: "",
-    rooms_description: "",
+    name: draft?.name || "",
+    raw_input: draft?.raw_input || "",
+    budget: draft?.budget || "",
+    timeline: draft?.timeline || "",
+    taboos: draft?.taboos || "",
+    must_haves: draft?.must_haves || "",
+    nice_to_haves: draft?.nice_to_haves || "",
+    rooms_description: draft?.rooms_description || "",
   });
 
-  // Вариант А — файл плана
+  // Floor plan AI analysis
   const [planFile, setPlanFile] = useState<File | null>(null);
   const [planPreview, setPlanPreview] = useState("");
+  const [analyzingPlan, setAnalyzingPlan] = useState(false);
+  const [planAnalysis, setPlanAnalysis] = useState<{
+    detected_dimensions: string;
+    detected_zones: string;
+    notes: string;
+  } | null>(draft?.planAnalysis || null);
 
-  // Вариант Б — ручные комнаты
-  const [rooms, setRooms] = useState<RoomData[]>([]);
+  // Rooms
+  const [rooms, setRooms] = useState<RoomData[]>(draft?.rooms || []);
+
+  // Autosave to localStorage with debounce
+  const saveDraft = useCallback((formData: typeof form, roomsData: RoomData[], analysis: any) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        ...formData,
+        rooms: roomsData,
+        planAnalysis: analysis,
+      }));
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    saveDraft(form, rooms, planAnalysis);
+  }, [form, rooms, planAnalysis, saveDraft]);
 
   const set = (key: string, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -79,7 +127,73 @@ const NewProject = () => {
   const removePlan = () => {
     setPlanFile(null);
     setPlanPreview("");
+    setPlanAnalysis(null);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const handleAnalyzePlan = async () => {
+    if (!planFile) return;
+    
+    // Only image files can be analyzed via vision
+    if (!planFile.type.startsWith("image/")) {
+      toast.info("AI-распознавание поддерживает только изображения (JPG, PNG). Для PDF загрузите скриншот.");
+      return;
+    }
+
+    setAnalyzingPlan(true);
+    try {
+      // Convert to base64
+      const buffer = await planFile.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
+
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-plan`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            imageBase64: base64,
+            mimeType: planFile.type,
+          }),
+        }
+      );
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Ошибка: ${resp.status}`);
+      }
+
+      const result = await resp.json();
+      setPlanAnalysis(result);
+      toast.success("Чертёж распознан");
+    } catch (e: any) {
+      toast.error(e.message || "Ошибка распознавания");
+      console.error(e);
+    } finally {
+      setAnalyzingPlan(false);
+    }
+  };
+
+  const handleApplyPlanData = () => {
+    if (!planAnalysis) return;
+    setForm(prev => ({
+      ...prev,
+      rooms_description: prev.rooms_description
+        ? `${prev.rooms_description}\n${planAnalysis.detected_zones}`
+        : planAnalysis.detected_zones,
+      raw_input: prev.raw_input
+        ? `${prev.raw_input}\nИз чертежа: ${planAnalysis.detected_dimensions}. ${planAnalysis.notes}`
+        : `Из чертежа: ${planAnalysis.detected_dimensions}. ${planAnalysis.notes}`,
+    }));
+    toast.success("Данные из чертежа подставлены в форму");
   };
 
   const hasRooms = rooms.some((r) => r.name.trim());
@@ -126,7 +240,6 @@ const NewProject = () => {
       // Re-upload with correct project id path
       if (planFile) {
         planUrl = await uploadPlanFile(planFile, project.id, 0);
-        // Update project with correct URL
         const { supabase } = await import("@/integrations/supabase/client");
         await supabase.from("projects").update({ plan_url: planUrl }).eq("id", project.id);
       }
@@ -143,6 +256,9 @@ const NewProject = () => {
           }));
         await saveRooms(project.id, roomsToSave);
       }
+
+      // Clear draft on success
+      localStorage.removeItem(DRAFT_KEY);
 
       toast.success("Проект создан!");
       navigate(`/project/${project.id}/style`);
@@ -183,9 +299,9 @@ const NewProject = () => {
           {/* === SECTION A: Plan upload === */}
           <div className="rounded-lg border border-border bg-card p-4 space-y-3">
             <div>
-              <Label className="text-base font-semibold">А. План помещения / чертёж</Label>
+              <Label className="text-base font-semibold">А. Чертёж или план помещения (необязательно)</Label>
               <p className="text-xs text-muted-foreground mt-1">
-                Есть готовый чертёж от застройщика или архитектора? Загрузите его.
+                Загрузите план от застройщика или свой эскиз. AI извлечёт размеры и зоны автоматически.
               </p>
             </div>
             <input
@@ -196,19 +312,78 @@ const NewProject = () => {
               onChange={handlePlanSelect}
             />
             {planFile ? (
-              <div className="flex items-center gap-3 rounded-md border border-border bg-muted/50 p-3">
-                {planPreview ? (
-                  <img src={planPreview} alt="План" className="h-20 w-20 rounded object-cover" />
-                ) : isPdf ? (
-                  <FileText className="h-12 w-12 text-muted-foreground" />
-                ) : (
-                  <ImageIcon className="h-12 w-12 text-muted-foreground" />
+              <>
+                <div className="flex items-center gap-3 rounded-md border border-border bg-muted/50 p-3">
+                  {planPreview ? (
+                    <img src={planPreview} alt="План" className="h-20 w-20 rounded object-cover" />
+                  ) : isPdf ? (
+                    <FileText className="h-12 w-12 text-muted-foreground" />
+                  ) : (
+                    <ImageIcon className="h-12 w-12 text-muted-foreground" />
+                  )}
+                  <span className="flex-1 truncate text-sm text-foreground">{planFile.name}</span>
+                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={removePlan}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Analyze button */}
+                {!planAnalysis && planFile.type.startsWith("image/") && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleAnalyzePlan}
+                    disabled={analyzingPlan}
+                  >
+                    {analyzingPlan ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Scan className="mr-2 h-4 w-4" />
+                    )}
+                    {analyzingPlan ? "Распознаю чертёж…" : "Распознать чертёж через AI"}
+                  </Button>
                 )}
-                <span className="flex-1 truncate text-sm text-foreground">{planFile.name}</span>
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={removePlan}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
+
+                {/* Analysis result */}
+                {planAnalysis && (
+                  <Collapsible defaultOpen>
+                    <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors">
+                      Распознано из чертежа
+                      <ChevronDown className="h-4 w-4" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-2 space-y-2 rounded-md border border-border p-3 text-sm">
+                      {planAnalysis.detected_dimensions && (
+                        <div>
+                          <span className="text-muted-foreground text-xs uppercase tracking-wide">Габариты:</span>
+                          <p className="text-foreground">{planAnalysis.detected_dimensions}</p>
+                        </div>
+                      )}
+                      {planAnalysis.detected_zones && (
+                        <div>
+                          <span className="text-muted-foreground text-xs uppercase tracking-wide">Зоны:</span>
+                          <p className="text-foreground">{planAnalysis.detected_zones}</p>
+                        </div>
+                      )}
+                      {planAnalysis.notes && (
+                        <div>
+                          <span className="text-muted-foreground text-xs uppercase tracking-wide">Примечания:</span>
+                          <p className="text-foreground">{planAnalysis.notes}</p>
+                        </div>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleApplyPlanData}
+                        className="w-full mt-2"
+                      >
+                        Подставить в форму
+                      </Button>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+              </>
             ) : (
               <Button type="button" variant="outline" className="w-full" onClick={() => fileRef.current?.click()}>
                 <Upload className="mr-2 h-4 w-4" />
@@ -262,7 +437,7 @@ const NewProject = () => {
             <Label htmlFor="raw">Заметки / переписка / транскрипт</Label>
             <Textarea
               id="raw"
-              placeholder="Вставьте сюда переписку с клиентом, голосовые заметки, пожелания…"
+              placeholder={RAW_INPUT_PLACEHOLDER}
               className="min-h-[120px]"
               value={form.raw_input}
               onChange={(e) => set("raw_input", e.target.value)}

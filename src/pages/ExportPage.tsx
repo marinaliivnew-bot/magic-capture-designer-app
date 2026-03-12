@@ -48,7 +48,7 @@ const ExportPage = () => {
   }, [projectId]);
 
   const handleExportPDF = () => {
-    const ok = generateFullPDF({ project, brief, rooms, issues, questions, blocks });
+    const ok = generateFullPDF({ project, brief, rooms, issues, questions, blocks }, { variant: "full" });
     if (!ok) {
       toast.info("Используйте Ctrl+P / Cmd+P для сохранения в PDF");
     }
@@ -73,9 +73,9 @@ const ExportPage = () => {
         title="Экспорт"
         projectName={project?.name}
       >
-        <Button onClick={handleExportPDF} size="sm">
+        <Button onClick={handleExportPDF} size="sm" title="Бриф + вопросы + концепт-борд">
           <Download className="mr-2 h-4 w-4" />
-          Скачать PDF
+          ↓ Полный PDF
         </Button>
       </ProjectHeader>
 

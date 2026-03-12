@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getProject, upsertBrief } from "@/lib/api";
+import { getProject, upsertBrief, getBrief } from "@/lib/api";
 import {
   STYLE_CARDS,
   COLOR_CARDS,
@@ -128,7 +128,7 @@ const StyleNarrowingPage = () => {
   };
 
   const getLabel = (key: string): string => {
-    const allCards = [...STYLE_CARDS, ...COLOR_CARDS, ...MATERIAL_CARDS];
+    const allCards = [...STYLE_CARDS, ...COLOR_CARDS, ...MATERIAL_CARDS, ...DISLIKE_CARDS];
     return allCards.find((c) => c.key === key)?.label || key;
   };
 
@@ -137,7 +137,6 @@ const StyleNarrowingPage = () => {
     setSaving(true);
     try {
       // Read existing brief to append, not overwrite
-      const { getBrief } = await import("@/lib/api");
       const existingBrief = await getBrief(projectId);
 
       const likes: string[] = [];
@@ -153,16 +152,31 @@ const StyleNarrowingPage = () => {
         ? selections.dislikes.map(getLabel).join(", ")
         : "";
 
-      // Append to existing values
+      // Append to existing values — prepend Style Narrowing result
       const existingLikes = (existingBrief as any)?.style_likes || "";
       const existingDislikes = (existingBrief as any)?.style_dislikes || "";
 
-      const mergedLikes = existingLikes
-        ? `${existingLikes}\n${newLikes}`
+      // Remove old Style Narrowing data if re-running
+      const cleanLikes = existingLikes
+        .split("\n")
+        .filter((line: string) => !line.startsWith("Стили:") && !line.startsWith("Цвет:") && !line.startsWith("Материалы:"))
+        .join("\n")
+        .trim();
+
+      const mergedLikes = cleanLikes
+        ? `${newLikes}\n${cleanLikes}`
         : newLikes;
       const mergedDislikes = existingDislikes
-        ? `${existingDislikes}\n${dislikes}`
+        ? `${dislikes}\n${existingDislikes}`
         : dislikes;
+
+      // Save style_narrowing_result as structured JSON
+      const styleNarrowingResult = {
+        styles: selections.styles.map(k => ({ key: k, label: getLabel(k) })),
+        colors: selections.colors.map(k => ({ key: k, label: getLabel(k) })),
+        materials: selections.materials.map(k => ({ key: k, label: getLabel(k) })),
+        dislikes: selections.dislikes.map(k => ({ key: k, label: getLabel(k) })),
+      };
 
       const refsPayload = userRefs.map((r) => ({
         url: r.url,
@@ -173,6 +187,7 @@ const StyleNarrowingPage = () => {
       await upsertBrief(projectId, {
         style_likes: mergedLikes,
         style_dislikes: mergedDislikes,
+        style_narrowing_result: styleNarrowingResult,
         user_refs: refsPayload,
       });
 

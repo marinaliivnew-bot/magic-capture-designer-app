@@ -9,16 +9,36 @@ interface PdfData {
   blocks: any[];
 }
 
-export function generateFullPDF(data: PdfData) {
+interface PdfOptions {
+  variant?: "brief" | "full";
+}
+
+function formatDate() {
+  return new Date().toLocaleDateString("ru-RU");
+}
+
+function formatFilenameDate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function generateFullPDF(data: PdfData, options: PdfOptions = {}) {
   const { project, brief, rooms, issues, questions, blocks } = data;
+  const variant = options.variant || "full";
   const printWindow = window.open("", "_blank");
   if (!printWindow) return false;
 
-  const date = new Date().toLocaleDateString("ru-RU");
+  const date = formatDate();
+  const fileDate = formatFilenameDate();
+  const projectName = project?.name || "Проект";
   const constraints = (project?.constraints as Record<string, string>) || {};
 
+  const docTitle = variant === "brief"
+    ? `${projectName}_бриф_${fileDate}`
+    : `${projectName}_концепт_${fileDate}`;
+
   // Title
-  const titleHtml = `<h1 style="font-size:32px;font-weight:300;margin:0 0 4px;">${project?.name || "Проект"}</h1>
+  const titleHtml = `<h1 style="font-size:32px;font-weight:300;margin:0 0 4px;">${projectName}</h1>
     <p style="font-size:13px;color:#888;margin-bottom:32px;">${date}</p>`;
 
   // Project info
@@ -70,8 +90,8 @@ export function generateFullPDF(data: PdfData) {
       ).join("")
     : "";
 
-  // Board
-  const boardHtml = (blocks || []).length > 0
+  // Board (only in full variant)
+  const boardHtml = variant === "full" && (blocks || []).length > 0
     ? `<h2>Концепт-борд</h2>` + blocks.map((block: any) => {
         const label = BOARD_BLOCK_TYPES.find(b => b.type === block.block_type)?.label || block.block_type;
         const images = (block.board_images || [])
@@ -85,7 +105,7 @@ export function generateFullPDF(data: PdfData) {
   // Footer
   const footerHtml = `<p class="footer">Draft concept, requires designer review · ${date}</p>`;
 
-  printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${project?.name || "Бриф"}</title>
+  printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${docTitle}</title>
 <style>
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:700px;margin:40px auto;padding:0 24px;color:#222;font-size:15px;line-height:1.6;}
 h1{font-size:32px;font-weight:300;margin-bottom:4px;}

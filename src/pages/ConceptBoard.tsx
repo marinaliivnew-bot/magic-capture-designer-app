@@ -69,9 +69,10 @@ const ConceptBoard = () => {
     if (!projectId) return;
     setGenerating(true);
     try {
-      const [freshBrief, freshRooms] = await Promise.all([
+      const [freshBrief, freshRooms, freshQuestions] = await Promise.all([
         getBrief(projectId),
         getRooms(projectId),
+        getQuestions(projectId),
       ]);
 
       const briefText = freshBrief
@@ -80,6 +81,7 @@ const ConceptBoard = () => {
           ).join("\n\n")
         : "(бриф не заполнен)";
 
+      // Rooms context
       const roomsContext = freshRooms && freshRooms.length > 0
         ? freshRooms.map((r: any) => {
             const typeLabel = ROOM_TYPES.find(t => t.value === r.room_type)?.label || r.room_type;
@@ -97,8 +99,20 @@ const ConceptBoard = () => {
       const styleLikes = (freshBrief as any)?.style_likes ? `\nСтилевые предпочтения: ${(freshBrief as any).style_likes}` : "";
       const styleDislikes = (freshBrief as any)?.style_dislikes ? `\nАнтипатии: ${(freshBrief as any).style_dislikes}` : "";
       const constraintsPractical = (freshBrief as any)?.constraints_practical ? `\nОграничения: ${(freshBrief as any).constraints_practical}` : "";
-      
-      const context = `Помещения проекта:\n${roomsContext}${descNote}${planNote}${usersInfo}${scenariosInfo}${styleLikes}${styleDislikes}${constraintsPractical}\nЗаметки: ${project?.raw_input || "нет"}`;
+
+      // Answered questions
+      const answeredQs = (freshQuestions || []).filter((q: any) => q.answer?.trim());
+      const answeredBlock = answeredQs.length > 0
+        ? `\n\nОТВЕТЫ КЛИЕНТА НА УТОЧНЯЮЩИЕ ВОПРОСЫ:\n${answeredQs.map((q: any) => `- Вопрос: ${q.text}\n  Ответ: ${q.answer}`).join("\n")}`
+        : "";
+
+      // Style narrowing result
+      const styleNarrowingResult = (freshBrief as any)?.style_narrowing_result;
+      const styleNarrowingBlock = styleNarrowingResult
+        ? `\n\nРЕЗУЛЬТАТЫ STYLE NARROWING:\n${JSON.stringify(styleNarrowingResult)}`
+        : "";
+
+      const context = `РАЗМЕРЫ ПОМЕЩЕНИЙ:\n${roomsContext}${descNote}${planNote}${usersInfo}${scenariosInfo}${styleLikes}${styleDislikes}${constraintsPractical}${answeredBlock}${styleNarrowingBlock}\n\nЗаметки: ${project?.raw_input || "нет"}`;
 
       await generateBoard(projectId, briefText, context);
       
@@ -145,7 +159,7 @@ const ConceptBoard = () => {
   };
 
   const handleExportPDF = () => {
-    const ok = generateFullPDF({ project, brief, rooms, issues, questions, blocks });
+    const ok = generateFullPDF({ project, brief, rooms, issues, questions, blocks }, { variant: "full" });
     if (!ok) toast.info("Используйте Ctrl+P / Cmd+P для сохранения в PDF");
   };
 
@@ -165,9 +179,9 @@ const ConceptBoard = () => {
         title="Концепт-борд"
         projectName={project?.name}
       >
-        <Button onClick={handleExportPDF} variant="outline" size="sm">
+        <Button onClick={handleExportPDF} variant="outline" size="sm" title="Бриф + вопросы + концепт-борд">
           <Download className="mr-2 h-4 w-4" />
-          PDF
+          ↓ Полный PDF
         </Button>
       </ProjectHeader>
 

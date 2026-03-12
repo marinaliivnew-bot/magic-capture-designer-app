@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getIssues, getQuestions, updateQuestion, getProject, getBrief, analyzeBrief, getBoardBlocks } from "@/lib/api";
+import { getIssues, getQuestions, updateQuestion, getProject, getBrief, analyzeBrief, getBoardBlocks, upsertBrief } from "@/lib/api";
 import { getRooms } from "@/lib/rooms";
 import { PRIORITY_CONFIG, BRIEF_SECTIONS, ROOM_TYPES } from "@/lib/constants";
 import { generateFullPDF } from "@/lib/pdf-export";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Loader2, AlertTriangle, HelpCircle, ArrowRight, ArrowLeft, Sparkles, RotateCcw, Download } from "lucide-react";
+import { Loader2, AlertTriangle, HelpCircle, ArrowRight, ArrowLeft, Sparkles, RotateCcw, Download, Check } from "lucide-react";
 
 const QuestionsPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -23,6 +23,11 @@ const QuestionsPage = () => {
   const [blocks, setBlocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [applyingAnswers, setApplyingAnswers] = useState(false);
+  const [answersApplied, setAnswersApplied] = useState(false);
+  const [savingAnswer, setSavingAnswer] = useState<string | null>(null);
+  const [savedAnswer, setSavedAnswer] = useState<string | null>(null);
+  const savedTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (!projectId) return;
@@ -70,14 +75,75 @@ const QuestionsPage = () => {
         item.id === q.id ? { ...item, answer } : item
       )
     );
+    // Reset applied status when new answers are entered
+    setAnswersApplied(false);
   };
 
   const handleSaveAnswer = async (q: any) => {
+    setSavingAnswer(q.id);
     try {
       await updateQuestion(q.id, { answer: q.answer });
-      toast.success("Ответ сохранён");
+      setSavedAnswer(q.id);
+      if (savedTimeout.current) clearTimeout(savedTimeout.current);
+      savedTimeout.current = setTimeout(() => setSavedAnswer(null), 2000);
     } catch (e) {
       toast.error("Ошибка сохранения");
+    } finally {
+      setSavingAnswer(null);
+    }
+  };
+
+  const handleApplyAnswers = async () => {
+    if (!projectId || !brief) return;
+    const answered = questions.filter(q => q.answer?.trim());
+    if (answered.length === 0) {
+      toast.info("Нет ответов для применения");
+      return;
+    }
+
+    setApplyingAnswers(true);
+    try {
+      const currentBrief: Record<string, string> = {};
+      BRIEF_SECTIONS.forEach(({ key }) => {
+        currentBrief[key] = (brief as any)?.[key] || "";
+      });
+
+      const answeredQuestions = answered.map(q => ({
+        question_text: q.text,
+        answer: q.answer,
+      }));
+
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/apply-answers`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ currentBrief, answeredQuestions }),
+        }
+      );
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Ошибка: ${resp.status}`);
+      }
+
+      const updatedFields = await resp.json();
+
+      // Save updated brief to DB
+      await upsertBrief(projectId, updatedFields);
+
+      // Update local state
+      setBrief((prev: any) => ({ ...prev, ...updatedFields }));
+      setAnswersApplied(true);
+      toast.success("Бриф обновлён на основе ответов клиента");
+    } catch (e: any) {
+      toast.error(e.message || "Ошибка применения ответов");
+      console.error(e);
+    } finally {
+      setApplyingAnswers(false);
     }
   };
 
@@ -105,11 +171,13 @@ const QuestionsPage = () => {
   };
 
   const handleExportPDF = () => {
-    const ok = generateFullPDF({ project, brief, rooms, issues, questions, blocks });
+    const ok = generateFullPDF({ project, brief, rooms, issues, questions, blocks }, { variant: "brief" });
     if (!ok) {
       toast.info("Используйте Ctrl+P / Cmd+P для сохранения в PDF");
     }
   };
+
+  const hasAnsweredQuestions = questions.some(q => q.answer?.trim());
 
   const getPriorityBadge = (priority: string) => {
     const variantMap: Record<string, "critical" | "important" | "optional"> = {
@@ -141,9 +209,9 @@ const QuestionsPage = () => {
         title="Вопросы и противоречия"
         projectName={project?.name}
       >
-        <Button onClick={handleExportPDF} variant="outline" size="sm">
+        <Button onClick={handleExportPDF} variant="outline" size="sm" title="Экспорт брифа и вопросов без концепт-борда">
           <Download className="mr-2 h-4 w-4" />
-          PDF
+          ↓ Бриф PDF
         </Button>
       </ProjectHeader>
 
@@ -221,12 +289,21 @@ const QuestionsPage = () => {
                         </p>
                       )}
                       {q.asked && (
-                        <Input
-                          placeholder="Ответ клиента…"
-                          value={q.answer || ""}
-                          onChange={(e) => handleAnswerChange(q, e.target.value)}
-                          onBlur={() => handleSaveAnswer(q)}
-                        />
+                        <div className="flex items-center gap-2">
+                          <Input
+                            placeholder="Ответ клиента…"
+                            value={q.answer || ""}
+                            onChange={(e) => handleAnswerChange(q, e.target.value)}
+                            onBlur={() => handleSaveAnswer(q)}
+                            className="flex-1"
+                          />
+                          {savingAnswer === q.id && (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          )}
+                          {savedAnswer === q.id && (
+                            <Check className="h-3 w-3 text-primary" />
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -235,6 +312,27 @@ const QuestionsPage = () => {
             </div>
           )}
         </section>
+
+        {/* Apply answers button */}
+        {hasAnsweredQuestions && (
+          <div className="mb-8">
+            <Button
+              variant="outline"
+              onClick={handleApplyAnswers}
+              disabled={applyingAnswers || answersApplied}
+              className="w-full"
+            >
+              {applyingAnswers ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : answersApplied ? (
+                <Check className="mr-2 h-4 w-4" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              {applyingAnswers ? "Обновляю бриф…" : answersApplied ? "Применено ✓" : "Применить ответы к брифу"}
+            </Button>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="border-t border-border pt-8 flex flex-col gap-4 sm:flex-row">

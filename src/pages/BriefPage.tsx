@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useParams, useNavigate } from "react-router-dom";
 import { getBrief, getProject, upsertBrief, analyzeBrief, getBoardBlocks, getIssues, getQuestions } from "@/lib/api";
@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress, getProgressTextColor } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Search, LayoutGrid, Save, Loader2, Sparkles, Settings, Palette, Download } from "lucide-react";
+import { Search, LayoutGrid, Save, Loader2, Sparkles, Settings, Palette, Download, Check } from "lucide-react";
+
+const STYLE_NARROWING_PREFIX = "【Из Style Narrowing】";
 
 const BriefPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -22,6 +24,9 @@ const BriefPage = () => {
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [savingField, setSavingField] = useState<string | null>(null);
+  const [savedField, setSavedField] = useState<string | null>(null);
+  const savedTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (!projectId) return;
@@ -59,6 +64,24 @@ const BriefPage = () => {
     return Math.round((filled / BRIEF_SECTIONS.length) * 100);
   })();
 
+  const handleFieldBlur = useCallback(async (key: string) => {
+    if (!projectId) return;
+    setSavingField(key);
+    try {
+      await upsertBrief(projectId, {
+        [key]: brief[key] || "",
+        completeness_score: completeness,
+      });
+      setSavedField(key);
+      if (savedTimeout.current) clearTimeout(savedTimeout.current);
+      savedTimeout.current = setTimeout(() => setSavedField(null), 2000);
+    } catch (e) {
+      console.error("Autosave error:", e);
+    } finally {
+      setSavingField(null);
+    }
+  }, [projectId, brief, completeness]);
+
   const handleSave = async () => {
     if (!projectId) return;
     setSaving(true);
@@ -95,7 +118,7 @@ const BriefPage = () => {
         issues: iss || [],
         questions: qs || [],
         blocks: bb || [],
-      });
+      }, { variant: "brief" });
       if (!ok) toast.info("Используйте Ctrl+P / Cmd+P для сохранения в PDF");
     } catch (e) {
       toast.error("Ошибка экспорта");
@@ -109,6 +132,8 @@ const BriefPage = () => {
       </div>
     );
   }
+
+  const hasStyleNarrowing = (value: string) => value.includes("Стили:") || value.includes("Цвет:") || value.includes("Материалы:");
 
   return (
     <div className="min-h-screen bg-background">
@@ -124,9 +149,9 @@ const BriefPage = () => {
         >
           <Settings className="h-5 w-5" strokeWidth={1.5} />
         </button>
-        <Button onClick={handleExportPDF} variant="outline" size="sm">
+        <Button onClick={handleExportPDF} variant="outline" size="sm" title="Экспорт брифа и вопросов без концепт-борда">
           <Download className="mr-2 h-4 w-4" />
-          PDF
+          ↓ Бриф PDF
         </Button>
       </ProjectHeader>
 
@@ -159,7 +184,24 @@ const BriefPage = () => {
                     Пройти Style Narrowing
                   </Button>
                 )}
+                {/* Save indicator */}
+                {savingField === key && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  </span>
+                )}
+                {savedField === key && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-primary">
+                    <Check className="h-3 w-3" /> Сохранено
+                  </span>
+                )}
               </div>
+              {/* Style Narrowing tag */}
+              {key === "style_likes" && hasStyleNarrowing(brief[key] || "") && (
+                <span className="inline-block mb-2 px-2 py-0.5 text-[10px] border border-primary/30 text-primary rounded">
+                  Из Style Narrowing
+                </span>
+              )}
               <p className="caption-style mb-4">{description}</p>
               <Textarea
                 placeholder={`${label.toLowerCase()}...`}
@@ -167,6 +209,7 @@ const BriefPage = () => {
                 onChange={(e) =>
                   setBrief((prev) => ({ ...prev, [key]: e.target.value }))
                 }
+                onBlur={() => handleFieldBlur(key)}
                 className="min-h-[80px]"
               />
             </div>
