@@ -292,7 +292,7 @@ const Index = () => {
                   <div
                     key={p.id}
                     className="border border-[#D0C8C0] bg-white p-6 cursor-pointer hover:border-primary transition-colors duration-350"
-                    onClick={() => navigate(`/project/${p.id}/input`)}
+                    onClick={() => navigate(`/project/${p.id}/edit`)}
                   >
                     <h3 className="font-display text-[20px] text-[#1A1A1A] mb-2">
                       {p.name}
