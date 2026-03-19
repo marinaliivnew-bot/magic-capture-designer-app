@@ -54,20 +54,65 @@ const StyleNarrowingPage = () => {
 
     const fetchImages = async () => {
       try {
-        const resp = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-style-images`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: JSON.stringify({ queries }),
-          }
+        const unsplashKey = import.meta.env.VITE_UNSPLASH_KEY;
+        if (!unsplashKey) {
+          throw new Error("Unsplash key is not configured");
+        }
+
+        const entries = Object.entries(queries);
+
+        const results = await Promise.all(
+          entries.map(async ([key, query]) => {
+            try {
+              const resp = await fetch(
+                `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
+                  query
+                )}&per_page=1`,
+                {
+                  headers: {
+                    Authorization: `Client-ID ${unsplashKey}`,
+                  },
+                }
+              );
+
+              if (!resp.ok) {
+                throw new Error("Failed to fetch from Unsplash");
+              }
+
+              const data = await resp.json();
+              const photo = data.results?.[0];
+              if (!photo) return [key, null] as const;
+
+              const url =
+                photo.urls?.regular ||
+                photo.urls?.small ||
+                photo.urls?.thumb ||
+                "";
+
+              if (!url) return [key, null] as const;
+
+              return [
+                key,
+                {
+                  url,
+                  attribution: `${photo.user?.name || "Unsplash"} / Unsplash`,
+                },
+              ] as const;
+            } catch (e) {
+              console.error(`Error fetching Unsplash image for ${key}:`, e);
+              return [key, null] as const;
+            }
+          })
         );
-        if (!resp.ok) throw new Error("Failed to fetch images");
-        const data = await resp.json();
-        setImages(data.images || {});
+
+        const imageMap: ImageCache = {};
+        for (const [key, value] of results) {
+          if (value) {
+            imageMap[key] = value;
+          }
+        }
+
+        setImages(imageMap);
       } catch (e) {
         console.error("Error fetching style images:", e);
         toast.error("Не удалось загрузить изображения");
