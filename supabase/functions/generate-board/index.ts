@@ -6,30 +6,35 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `Ты опытный дизайнер интерьера, создающий концепт-борд для проекта.
-Генерируй описания блоков борда, строго опираясь на данные брифа.
-Упоминай конкретные размеры помещений в подписях к блокам где это уместно.
-Учитывай ответы клиента на уточняющие вопросы — они важнее общих предпочтений.
-Отвечай ТОЛЬКО вызовом функции generate_board_result. Язык: русский.
+const SYSTEM_PROMPT = `Ты — опытный дизайнер интерьера. Твоя задача — принять конкретные дизайнерские решения на основе брифа, а не пересказывать его.
 
-Типы блоков (создай ровно 5, по одному каждого типа):
-1. atmosphere — Атмосфера / Вайб: общее настроение, эмоция пространства
-2. palette — Цветовая палитра: основные и акцентные цвета, их сочетания
-3. materials — Материалы и текстуры: дерево, камень, ткани, металл и т.д.
-4. furniture — Мебель / формы: стиль мебели, силуэты, формы
-5. lighting — Освещение: тип, настроение, сценарии света
+Для каждого блока концепт-борда:
+- Предложи конкретное решение (материал, модель, приём, сочетание)
+- Объясни ПОЧЕМУ это решение подходит именно для этого пространства с учётом габаритов, сценариев и ограничений
+- Добавь 1 профессиональный совет которого клиент сам не догадается
 
-ВАЖНО для подписей блоков борда:
-- В блоке "Мебель / формы" упомяни конкретную мебель из ответов клиента
-- В блоке "Атмосфера" упомяни количество людей и назначение каждой зоны
-- В блоке "Материалы" учти влажные зоны (парная, санузел) если они есть
-- В каждом блоке упоминай конкретные помещения с их габаритами
+Примеры ПЛОХИХ caption:
+'В парной используется дерево согласно пожеланиям клиента'
+'Тёплая нейтральная палитра соответствует стилю скандинавский'
 
-Для каждого блока:
-- caption: развёрнутое описание (2-4 предложения) визуального направления с привязкой к конкретным помещениям
-- search_queries: ровно 3 поисковых запроса на английском для поиска референсных изображений (для Pinterest/Unsplash)
+Примеры ХОРОШИХ caption:
+'Для парной 5,79м² — вертикальная раскладка термоосины: она светлее 
+ели, не темнеет и не выделяет смолу при нагреве. Потолок занижаем 
+до 2,1м — так парная прогревается быстрее и экономит дрова'
+'В гостиной 12,26м² диван ставим не вдоль стены а под углом 45° к 
+входу — это визуально зонирует кухню и гостиную без перегородки'
 
-Пиши caption на русском языке. search_queries — на английском.`;
+search_queries должны быть конкретными деталями, не общими стилями:
+ПЛОХО: 'scandinavian interior warm'
+ХОРОШО: 'thermowood aspen sauna vertical paneling'
+
+Отвечай ТОЛЬКО вызовом функции generate_board_result.
+Внутри arguments возвращай только валидный JSON без markdown.
+
+Формат результата (совместимо с generate_board_result):
+Создай ровно 5 блоков (по одному каждого типа): atmosphere, palette, materials, furniture, lighting.
+caption: развёрнутое описание на русском (2-4 предложения) с конкретикой по помещениям (если есть размеры — упоминай их).
+search_queries: ровно 3 поисковых запроса на английском.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -39,10 +44,12 @@ serve(async (req) => {
   try {
     const { briefText, projectContext, userRefs } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    // Supabase Edge Functions не знают `import.meta.env`, поэтому берем ключ из env.
+    // Ожидаем имя переменной как в Vite-конфигах: VITE_OPENAI_KEY (с fallback).
+    const OPENAI_API_KEY = Deno.env.get("VITE_OPENAI_KEY") || Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "LOVABLE_API_KEY is not configured" }),
+        JSON.stringify({ error: "OPENAI_API_KEY (VITE_OPENAI_KEY) is not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -57,14 +64,14 @@ ${projectContext || "Не указан"}
 ## Бриф
 ${briefText}${refsBlock}`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
@@ -110,17 +117,11 @@ ${briefText}${refsBlock}`;
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("AI gateway error:", response.status, errText);
+      console.error("OpenAI error:", response.status, errText);
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Слишком много запросов, попробуйте позже" }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Необходимо пополнить баланс AI" }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       return new Response(
