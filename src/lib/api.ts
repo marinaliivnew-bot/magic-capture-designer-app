@@ -292,53 +292,27 @@ export async function generateBoard(projectId: string, briefText: string, projec
     });
   });
 
-  // Fetch real images directly from Unsplash (avoid edge-function CORS issues)
+  // Fetch real images through server-side edge function (keeps API keys off client)
   let imageMap: Record<string, { url: string; attribution: string }> = {};
   try {
-    const unsplashKey = import.meta.env.VITE_UNSPLASH_KEY;
-    if (!unsplashKey) {
-      throw new Error("VITE_UNSPLASH_KEY is not configured");
-    }
-
-    const entries = Object.entries(allQueries);
-    const results = await Promise.all(
-      entries.map(async ([key, query]) => {
-        try {
-          const resp = await fetch(
-            `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
-              query
-            )}&per_page=1`,
-            {
-              headers: {
-                Authorization: `Client-ID ${unsplashKey}`,
-              },
-            }
-          );
-          if (!resp.ok) return [key, null] as const;
-          const data = await resp.json();
-          const photo = data.results?.[0];
-          if (!photo) return [key, null] as const;
-
-          const url =
-            photo.urls?.regular || photo.urls?.small || photo.urls?.thumb || "";
-          if (!url) return [key, null] as const;
-
-          return [
-            key,
-            {
-              url,
-              attribution: `${photo.user?.name || "Unsplash"} / Unsplash`,
-            },
-          ] as const;
-        } catch (e) {
-          console.error(`Unsplash fetch failed for ${key}:`, e);
-          return [key, null] as const;
+    if (Object.keys(allQueries).length > 0) {
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-style-images`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ queries: allQueries }),
         }
-      })
-    );
-
-    for (const [key, value] of results) {
-      if (value) imageMap[key] = value;
+      );
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Style image fetch failed: ${resp.status}`);
+      }
+      const data = await resp.json();
+      imageMap = data.images || {};
     }
   } catch (e) {
     console.error("Failed to fetch board images:", e);
