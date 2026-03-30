@@ -339,3 +339,11 @@ export async function generateBoard(projectId: string, briefText: string, projec
 
   return result;
 }
+
+export async function parseRoomsFromText(text: string): Promise<{ name: string; room_type: string; dimensions_text: string }[]> {
+  const { data, error } = await supabase.functions.invoke("parse-rooms", {
+    body: { text },
+  });
+  if (error) throw error;
+  return data?.rooms || [];
+}

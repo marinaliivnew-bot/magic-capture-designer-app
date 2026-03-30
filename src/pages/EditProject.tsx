@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getProject, updateProject } from "@/lib/api";
+import { getProject, updateProject, parseRoomsFromText } from "@/lib/api";
 import { saveRooms, getRooms, uploadPlanFile } from "@/lib/rooms";
 import RoomCard, { type RoomData } from "@/components/RoomCard";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Save, Plus, Upload, X, FileText, Image as ImageIcon, ArrowLeft } from "lucide-react";
+import { Loader2, Save, Plus, Upload, X, FileText, Image as ImageIcon, ArrowLeft, Sparkles } from "lucide-react";
 
 function makeRoom(): RoomData {
   return {
@@ -41,6 +41,7 @@ const EditProject = () => {
   const [planPreview, setPlanPreview] = useState("");
   const [existingPlanUrl, setExistingPlanUrl] = useState("");
   const [rooms, setRooms] = useState<RoomData[]>([]);
+  const [fillingRooms, setFillingRooms] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
@@ -272,6 +273,42 @@ const EditProject = () => {
             <Button type="button" variant="outline" className="w-full" onClick={addRoom}>
               <Plus className="mr-2 h-4 w-4" />
               Добавить помещение
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-muted-foreground"
+              disabled={fillingRooms || !form.rooms_description?.trim()}
+              onClick={async () => {
+                if (!form.rooms_description?.trim()) return;
+                setFillingRooms(true);
+                try {
+                  const parsed = await parseRoomsFromText(form.rooms_description);
+                  if (parsed.length === 0) {
+                    toast.info("Не удалось распознать помещения — проверьте текст");
+                    return;
+                  }
+                  const newRooms = parsed.map((r) => ({
+                    id: crypto.randomUUID(),
+                    name: r.name,
+                    room_type: r.room_type,
+                    dimensions_text: r.dimensions_text,
+                  }));
+                  setRooms(newRooms);
+                  toast.success(`Добавлено помещений: ${newRooms.length}`);
+                } catch (e: any) {
+                  toast.error(e.message || "Ошибка распознавания");
+                } finally {
+                  setFillingRooms(false);
+                }
+              }}
+            >
+              {fillingRooms ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              {fillingRooms ? "Распознаю…" : "Заполнить из текста"}
             </Button>
           </div>
 
