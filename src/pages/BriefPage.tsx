@@ -14,6 +14,7 @@ import { Search, LayoutGrid, Save, Loader2, Sparkles, Settings, Palette, Downloa
 
 const STYLE_NARROWING_PREFIX = "【Из Style Narrowing】";
 
+
 const BriefPage = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
