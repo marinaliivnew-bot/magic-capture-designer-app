@@ -67,7 +67,7 @@ const StyleNarrowingPage = () => {
               const resp = await fetch(
                 `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
                   query
-                )}&per_page=1`,
+                )}&per_page=10`,
                 {
                   headers: {
                     Authorization: `Client-ID ${unsplashKey}`,
@@ -80,7 +80,8 @@ const StyleNarrowingPage = () => {
               }
 
               const data = await resp.json();
-              const photo = data.results?.[0];
+              const results = data.results || [];
+              const photo = results.length > 0 ? results[Math.floor(Math.random() * Math.min(results.length, 10))] : null;
               if (!photo) return [key, null] as const;
 
               const url =
