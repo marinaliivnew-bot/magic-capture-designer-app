@@ -11,6 +11,7 @@ import QuestionsPage from "./pages/QuestionsPage";
 import ConceptBoard from "./pages/ConceptBoard";
 import StyleNarrowingPage from "./pages/StyleNarrowingPage";
 import ExportPage from "./pages/ExportPage";
+import DesignerProfilePage from "./pages/DesignerProfilePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/new" element={<NewProject />} />
+          <Route path="/profile" element={<DesignerProfilePage />} />
           <Route path="/project/:projectId/brief" element={<BriefPage />} />
           <Route path="/project/:projectId/edit" element={<EditProject />} />
           <Route path="/project/:projectId/style" element={<StyleNarrowingPage />} />

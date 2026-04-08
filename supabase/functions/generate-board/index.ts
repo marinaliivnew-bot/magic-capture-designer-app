@@ -3,38 +3,74 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-id",
 };
 
-const SYSTEM_PROMPT = `Ты — опытный дизайнер интерьера. Твоя задача — принять конкретные дизайнерские решения на основе брифа, а не пересказывать его.
+const SYSTEM_PROMPT = `Ты — опытный дизайнер интерьера. Принимай конкретные дизайнерские решения 
+на основе брифа. Не пересказывай бриф — интерпретируй его.
 
-Для каждого блока концепт-борда:
-- Предложи конкретное решение (материал, модель, приём, сочетание)
-- Объясни ПОЧЕМУ это решение подходит именно для этого пространства с учётом габаритов, сценариев и ограничений
-- Добавь 1 профессиональный совет которого клиент сам не догадается
+ВАЖНО: В брифе есть поле "табу" (style_dislikes). Ни один search_query 
+не должен противоречить табу. Например, если табу "без золота" — 
+не используй gold, brass, golden в запросах.
+
+Создай ровно 5 блоков. Для каждого — своя логика:
+
+ATMOSPHERE (атмосфера):
+- caption: 1-2 предложения — эмоция и сценарий, не описание стиля
+- search_queries: 3 запроса для Unsplash. Формат: конкретный объект + 
+  материал + свет. Обязательно добавляй "interior" или "room". 
+  Пример: "log cabin interior warm light evening", 
+  "scandinavian sauna wooden bench steam"
+- color_chips: пустой массив []
+- lighting_zones: пустой массив []
+
+PALETTE (палитра):
+- caption: 1 предложение — как цвета распределяются по помещениям
+- search_queries: 1 запрос для референсного интерьерного фото
+- color_chips: массив из 5-6 объектов: 
+  { "hex": "#F5ECD7", "name": "сливочный", "role": "стены" }
+  Роли: стены / пол / акцент / текстиль / детали
+- lighting_zones: пустой массив []
+
+MATERIALS (материалы):
+- caption: конкретные материалы с указанием помещения и причины выбора. 
+  Упоминай ценовой сегмент (эконом/средний/премиум). 2-3 предложения.
+- search_queries: 3 запроса. Формат: материал + применение + фактура. 
+  Добавляй "texture", "surface", "tile", "floor" — не "interior style".
+  Пример: "quartz vinyl plank floor wood texture", 
+  "matte stone tile bathroom warm beige"
+- color_chips: пустой массив []
+- lighting_zones: пустой массив []
+
+FURNITURE (мебель):
+- caption: типология мебели с габаритами, привязанная к размерам помещений 
+  из брифа. Если гостиная 12м² — пиши "компактный двухместный диван 
+  до 160см", не "диван средней величины". 2-3 предложения.
+- search_queries: 3 запроса. Формат: тип мебели + материал + стиль. 
+  Пример: "compact two seat sofa linen fabric natural wood legs",
+  "wooden bed frame light oak minimal"
+- color_chips: пустой массив []
+- lighting_zones: пустой массив []
+
+LIGHTING (освещение):
+- caption: 1 предложение общее
+- search_queries: 2 запроса для визуальных референсов освещения
+- color_chips: пустой массив []
+- lighting_zones: массив из 3-5 объектов по зонам помещений:
+  { "zone": "гостиная", "scenario": "вечерний отдых", 
+    "type": "подвесной светильник + торшер", "kelvin": "2700K" }
 
 Примеры ПЛОХИХ caption:
-'В парной используется дерево согласно пожеланиям клиента'
-'Тёплая нейтральная палитра соответствует стилю скандинавский'
+"Тёплая нейтральная палитра соответствует скандинавскому стилю"
+"В парной используется дерево согласно пожеланиям"
 
 Примеры ХОРОШИХ caption:
-'Для парной 5,79м² — вертикальная раскладка термоосины: она светлее 
-ели, не темнеет и не выделяет смолу при нагреве. Потолок занижаем 
-до 2,1м — так парная прогревается быстрее и экономит дрова'
-'В гостиной 12,26м² диван ставим не вдоль стены а под углом 45° к 
-входу — это визуально зонирует кухню и гостиную без перегородки'
+"Для парной 5,79м² — вертикальная термоосина: светлее ели, 
+не темнеет и не выделяет смолу при нагреве"
+"Диван ставим под углом 45° к входу — визуально зонирует кухню 
+и гостиную в 12м² без перегородки"
 
-search_queries должны быть конкретными деталями, не общими стилями:
-ПЛОХО: 'scandinavian interior warm'
-ХОРОШО: 'thermowood aspen sauna vertical paneling'
-
-Отвечай ТОЛЬКО вызовом функции generate_board_result.
-Внутри arguments возвращай только валидный JSON без markdown.
-
-Формат результата (совместимо с generate_board_result):
-Создай ровно 5 блоков (по одному каждого типа): atmosphere, palette, materials, furniture, lighting.
-caption: развёрнутое описание на русском (2-4 предложения) с конкретикой по помещениям (если есть размеры — упоминай их).
-search_queries: ровно 3 поисковых запроса на английском.`;
+Отвечай ТОЛЬКО вызовом функции generate_board_result.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -99,8 +135,35 @@ ${briefText}${refsBlock}`;
                           type: "array",
                           items: { type: "string" },
                         },
+                        color_chips: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              hex: { type: "string" },
+                              name: { type: "string" },
+                              role: { type: "string" },
+                            },
+                            required: ["hex", "name", "role"],
+                            additionalProperties: false,
+                          },
+                        },
+                        lighting_zones: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              zone: { type: "string" },
+                              scenario: { type: "string" },
+                              type: { type: "string" },
+                              kelvin: { type: "string" },
+                            },
+                            required: ["zone", "scenario", "type", "kelvin"],
+                            additionalProperties: false,
+                          },
+                        },
                       },
-                      required: ["block_type", "caption", "search_queries"],
+                      required: ["block_type", "caption", "search_queries", "color_chips", "lighting_zones"],
                       additionalProperties: false,
                     },
                   },

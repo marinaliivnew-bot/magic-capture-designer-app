@@ -3,22 +3,40 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-id",
 };
 
-const SYSTEM_PROMPT = `Ты — эксперт-аналитик интерьерных брифов. Тебе дают бриф дизайн-проекта.
+const SYSTEM_PROMPT = `Ты — эксперт-аналитик интерьерных брифов. Работаешь как опытный 
+дизайнер на первой встрече с клиентом.
 
-Твоя задача:
-1. Найти **противоречия** (contradictions) — где пожелания клиента конфликтуют друг с другом.
-2. Сформулировать **уточняющие вопросы** (questions) — что нужно узнать, чтобы двигаться дальше.
+ВАЖНО: ВСЕ ответы, вопросы и описания — строго на русском языке.
 
-Ответь СТРОГО вызовом функции analyze_brief_result. Не пиши текст вне функции.
+Алгоритм работы — строго по шагам:
 
-Правила:
-- Противоречий обычно 0-5. Не выдумывай, если всё логично.
-- Вопросов обычно 3-10. Приоритет: critical (блокирует проектирование), important (сильно влияет), optional (было бы полезно).
-- Пиши на русском языке.
-- Для каждого вопроса укажи "unlocks" — что именно разблокирует ответ.`;
+ШАГ 1. Прочитай раздел "УЖЕ ИЗВЕСТНО" в сообщении пользователя.
+Это список того, что клиент уже сообщил. По этим пунктам 
+вопросы НЕ задаются — никогда, ни в какой форме.
+
+ШАГ 2. Найди противоречия — только там, где пожелания реально 
+конфликтуют друг с другом. Не выдумывай. Обычно 0-3.
+
+ШАГ 3. Сформулируй вопросы ТОЛЬКО по реально пустым местам —
+то, чего нет ни в брифе, ни в разделе "УЖЕ ИЗВЕСТНО".
+
+Приоритеты вопросов:
+- critical: без ответа нельзя начать планировку
+- important: влияет на концепцию
+- optional: уточнение, незначительно улучшающее результат
+
+Правила формулировки вопросов:
+- Пиши как человек, не как анкета
+- Один вопрос = одна конкретная вещь
+- Не задавай вопросы про оттенки, если палитра уже названа
+- Не задавай вопросы про сценарии, если они описаны
+- Не задавай вопросы про состав семьи, если он указан
+- Максимум 5 вопросов. Лучше 3 точных, чем 7 размытых.
+
+Ответь СТРОГО вызовом функции analyze_brief_result.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -40,10 +58,15 @@ serve(async (req) => {
       ? `\n\n## Пользовательские референсы\nПользователь загрузил свои референсы. Учитывай это при формировании style_likes.\n${userRefs.map((r: { url: string; step?: string }) => `- [${r.step || "ref"}] ${r.url}`).join("\n")}`
       : "";
 
-    const userPrompt = `## Контекст проекта
-${projectContext || "Не указан"}
+    const knownFacts = [
+      briefText.includes('users') ? `Пользователи: уже описаны в брифе` : null,
+      projectContext ? `Контекст: ${projectContext}` : null,
+    ].filter(Boolean).join('\n');
 
-## Бриф
+    const userPrompt = `## УЖЕ ИЗВЕСТНО — по этим пунктам вопросы не нужны:
+${knownFacts || 'Нет данных'}
+
+Полный бриф (для поиска пустых мест и противоречий):
 ${briefText}${refsBlock}`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {

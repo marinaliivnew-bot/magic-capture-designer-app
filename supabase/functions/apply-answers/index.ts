@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-id",
 };
 
 serve(async (req) => {
@@ -14,72 +14,47 @@ serve(async (req) => {
   try {
     const { currentBrief, answeredQuestions } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "LOVABLE_API_KEY is not configured" }),
+        JSON.stringify({ error: "OPENAI_API_KEY is not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const systemPrompt = `Ты ассистент дизайнера интерьера. Тебе дан текущий бриф (JSON) и список вопросов с ответами клиента. Обнови поля брифа, добавив информацию из ответов. Не удаляй существующие данные — только дополняй. Отвечай ТОЛЬКО вызовом функции update_brief_result. Язык: русский.`;
+    const systemPrompt = `Ты ассистент дизайнера интерьера. Тебе дан текущий бриф (JSON) и список вопросов с ответами клиента. Обнови поля брифа, добавив информацию из ответов. Не удаляй существующие данные — только дополняй. Отвечай ТОЛЬКО валидным JSON без markdown и преамбулы. Поля: users_of_space, scenarios, zones, storage, style_likes, style_dislikes, constraints_practical, success_criteria.`;
 
-    const userPrompt = `Текущий бриф:\n${JSON.stringify(currentBrief, null, 2)}\n\nОтветы на вопросы:\n${JSON.stringify(answeredQuestions, null, 2)}\n\nВерни обновлённый бриф.`;
+    const userPrompt = `Текущий бриф:\n${JSON.stringify(currentBrief, null, 2)}\n\nОтветы на вопросы:\n${JSON.stringify(answeredQuestions, null, 2)}\n\nВерни обновлённый бриф в формате JSON.`;
 
-    const briefFields = [
-      "users_of_space", "scenarios", "zones", "storage",
-      "style_likes", "style_dislikes", "constraints_practical", "success_criteria"
-    ];
-
-    const properties: Record<string, any> = {};
-    briefFields.forEach(f => {
-      properties[f] = { type: "string", description: `Updated field: ${f}` };
-    });
-
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "update_brief_result",
-              description: "Return updated brief fields",
-              parameters: {
-                type: "object",
-                properties,
-                required: briefFields,
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "update_brief_result" } },
+        temperature: 0.3,
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("AI gateway error:", response.status, errText);
+      console.error("OpenAI API error:", response.status, errText);
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Слишком много запросов, попробуйте позже" }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+      if (response.status === 401) {
         return new Response(
-          JSON.stringify({ error: "Необходимо пополнить баланс AI" }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Ошибка авторизации OpenAI API" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       return new Response(
@@ -89,17 +64,30 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    const content = data.choices?.[0]?.message?.content;
 
-    if (!toolCall?.function?.arguments) {
-      console.error("No tool call in response:", JSON.stringify(data));
+    if (!content) {
+      console.error("No content in response:", JSON.stringify(data));
       return new Response(
-        JSON.stringify({ error: "AI did not return structured output" }),
+        JSON.stringify({ error: "AI did not return content" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const result = JSON.parse(toolCall.function.arguments);
+    // Parse JSON from response
+    let result;
+    try {
+      // Extract JSON from markdown code blocks if present
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      const jsonString = jsonMatch ? jsonMatch[1] : content;
+      result = JSON.parse(jsonString);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError, "Content:", content);
+      return new Response(
+        JSON.stringify({ error: "AI returned invalid JSON", rawResponse: content }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

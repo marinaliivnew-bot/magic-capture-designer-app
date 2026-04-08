@@ -84,26 +84,36 @@ export async function getBrief(projectId: string) {
   return data;
 }
 
-export async function upsertBrief(projectId: string, fields: Record<string, unknown>) {
+const ALLOWED_BRIEF_FIELDS = [
+  "users_of_space",
+  "scenarios",
+  "zones",
+  "storage",
+  "style_likes",
+  "style_dislikes",
+  "constraints_practical",
+  "success_criteria",
+  "completeness_score",
+];
+
+export async function upsertBrief(projectId: string, fields: Record<string, any>) {
+  const filtered = Object.fromEntries(
+    Object.entries(fields).filter(([key]) => ALLOWED_BRIEF_FIELDS.includes(key))
+  );
+
   // Check if brief exists
   const existing = await getBrief(projectId);
   if (existing) {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("briefs")
-      .update(fields)
-      .eq("project_id", projectId)
-      .select()
-      .single();
+      .update(filtered)
+      .eq("project_id", projectId);
     if (error) throw error;
-    return data;
   } else {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("briefs")
-      .insert({ project_id: projectId, ...fields })
-      .select()
-      .single();
+      .insert({ project_id: projectId, ...filtered });
     if (error) throw error;
-    return data;
   }
 }
 
@@ -287,7 +297,7 @@ export async function generateBoard(projectId: string, briefText: string, projec
   // Collect all search queries to fetch real images
   const allQueries: Record<string, string> = {};
   (result.blocks || []).forEach((b: any, i: number) => {
-    (b.search_queries || []).forEach((q: string, j: number) => {
+    (Array.isArray(b.search_queries) ? b.search_queries : []).forEach((q: string, j: number) => {
       allQueries[`board_${i}_${j}`] = q;
     });
   });
@@ -323,7 +333,7 @@ export async function generateBoard(projectId: string, briefText: string, projec
     block_type: b.block_type,
     caption: b.caption,
     sort_order: i,
-    images: (b.search_queries || []).map((q: string, j: number) => {
+    images: (Array.isArray(b.search_queries) ? b.search_queries : []).map((q: string, j: number) => {
       const key = `board_${i}_${j}`;
       const img = imageMap[key];
       return {
@@ -346,4 +356,37 @@ export async function parseRoomsFromText(text: string): Promise<{ name: string; 
   });
   if (error) throw error;
   return data?.rooms || [];
+}
+
+// Designer Profile API (v2-three-layer)
+export interface DesignerProfile {
+  id?: string;
+  session_id: string;
+  style_description: string;
+  style_refs: string[];
+  hard_constraints: Record<string, any>;
+  ergonomics_rules: Record<string, any>;
+  custom_ergonomics_text?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function getDesignerProfile(sessionId: string): Promise<DesignerProfile | null> {
+  const { data, error } = await supabase
+    .from("designer_profile")
+    .select("*")
+    .eq("session_id", sessionId)
+    .single();
+  if (error && error.code !== "PGRST116") throw error;
+  return data;
+}
+
+export async function upsertDesignerProfile(profile: DesignerProfile): Promise<DesignerProfile> {
+  const { data, error } = await supabase
+    .from("designer_profile")
+    .upsert(profile, { onConflict: "session_id" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }

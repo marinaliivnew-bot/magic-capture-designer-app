@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { createProject } from "@/lib/api";
+import { createProject, parseRoomsFromText } from "@/lib/api";
 import { saveRooms, uploadPlanFile } from "@/lib/rooms";
 import RoomCard, { type RoomData } from "@/components/RoomCard";
 import { Button } from "@/components/ui/button";
@@ -73,6 +73,7 @@ const NewProject = () => {
 
   // Rooms
   const [rooms, setRooms] = useState<RoomData[]>(draft?.rooms || []);
+  const [fillingRooms, setFillingRooms] = useState(false);
 
   // Autosave to localStorage with debounce
   const saveDraft = useCallback((formData: typeof form, roomsData: RoomData[], analysis: any) => {
@@ -413,6 +414,42 @@ const NewProject = () => {
             <Button type="button" variant="outline" className="w-full" onClick={addRoom}>
               <Plus className="mr-2 h-4 w-4" />
               Добавить помещение
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-muted-foreground"
+              disabled={fillingRooms || !form.rooms_description?.trim()}
+              onClick={async () => {
+                if (!form.rooms_description?.trim()) return;
+                setFillingRooms(true);
+                try {
+                  const parsed = await parseRoomsFromText(form.rooms_description);
+                  if (parsed.length === 0) {
+                    toast.info("Не удалось распознать помещения — проверьте текст");
+                    return;
+                  }
+                  const newRooms = parsed.map((r) => ({
+                    id: crypto.randomUUID(),
+                    name: r.name,
+                    room_type: r.room_type,
+                    dimensions_text: r.dimensions_text,
+                  }));
+                  setRooms(newRooms);
+                  toast.success(`Добавлено помещений: ${newRooms.length}`);
+                } catch (e: any) {
+                  toast.error(e.message || "Ошибка распознавания");
+                } finally {
+                  setFillingRooms(false);
+                }
+              }}
+            >
+              {fillingRooms ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              {fillingRooms ? "Распознаю…" : "Заполнить габариты из текста"}
             </Button>
           </div>
 
