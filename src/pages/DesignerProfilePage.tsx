@@ -63,13 +63,31 @@ const DesignerProfilePage = () => {
       if (data) {
         setProfile(data);
         // Parse uploaded files from style_refs (filter out URLs that start with http)
-        const files = data.style_refs
-          ?.filter((ref: string) => ref.startsWith("designer-portfolio/"))
-          ?.map((path: string) => ({
-            path,
-            name: path.split("/").pop() || "",
-            url: supabase.storage.from("designer-portfolio").getPublicUrl(path).data.publicUrl,
-          })) || [];
+        const filePaths = data.style_refs?.filter((ref: string) => 
+          ref.startsWith("designer-portfolio/")
+        ) || [];
+        
+        // Verify files exist before creating URLs
+        const files: UploadedFile[] = [];
+        for (const path of filePaths) {
+          try {
+            const { data: fileData } = await supabase.storage
+              .from("designer-portfolio")
+              .list(path.split("/").slice(0, -1).join("/"));
+            const fileExists = fileData?.some(f => path.endsWith(f.name));
+            if (fileExists) {
+              const { data } = supabase.storage.from("designer-portfolio").getPublicUrl(path);
+              files.push({
+                path,
+                name: path.split("/").pop() || "",
+                url: data.publicUrl,
+              });
+            }
+          } catch {
+            // Skip files that can't be verified
+            console.warn(`Could not verify file: ${path}`);
+          }
+        }
         setUploadedFiles(files);
       }
     } catch (e) {
