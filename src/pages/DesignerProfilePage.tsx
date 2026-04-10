@@ -123,18 +123,8 @@ const DesignerProfilePage = () => {
     }));
   };
 
-  const handleDrag = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  }, []);
-
   // Normalize filename: transliterate Cyrillic, remove spaces and special chars
-  const sanitizeFilename = (name: string): string => {
+  const sanitizeFilename = useCallback((name: string): string => {
     const translit: Record<string, string> = {
       'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
       'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
@@ -147,13 +137,24 @@ const DesignerProfilePage = () => {
       'Ф': 'F', 'Х': 'H', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch', 'Ъ': '',
       'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
     };
-    return name
+    const normalized = name
       .split('')
       .map(char => translit[char] || char)
       .join('')
       .replace(/\s+/g, '_')
       .replace(/[^a-zA-Z0-9._-]/g, '');
-  };
+    return normalized || 'file'; // fallback if everything stripped
+  }, []);
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  }, []);
 
   const uploadFiles = async (files: File[]) => {
     const validTypes = ["image/jpeg", "image/png", "image/jpg", "application/pdf"];
