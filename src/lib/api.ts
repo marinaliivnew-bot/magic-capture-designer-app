@@ -376,8 +376,8 @@ export async function getDesignerProfile(sessionId: string): Promise<DesignerPro
     .from("designer_profile")
     .select("*")
     .eq("session_id", sessionId)
-    .single();
-  if (error && error.code !== "PGRST116") throw error;
+    .maybeSingle();
+  if (error) throw error;
   return data;
 }
 
