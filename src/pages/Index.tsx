@@ -47,10 +47,13 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-background">
-        <div className="mx-auto max-w-7xl px-6 sm:px-12 py-4">
+        <div className="mx-auto max-w-7xl px-6 sm:px-12 py-4 flex items-center justify-between">
           <a href="/" className="font-display text-xl text-foreground hover:text-primary transition-colors duration-350">
             Brief → Concept
           </a>
+          <Button variant="outline" size="sm" onClick={() => navigate("/profile")}>
+            Мои стандарты
+          </Button>
         </div>
       </header>
 

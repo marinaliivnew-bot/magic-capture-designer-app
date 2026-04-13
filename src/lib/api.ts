@@ -254,7 +254,7 @@ export async function analyzeBrief(projectId: string, briefText: string, project
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify({ briefText, projectContext, userRefs }),
     }
@@ -283,7 +283,7 @@ export async function generateBoard(projectId: string, briefText: string, projec
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify({ briefText, projectContext, userRefs }),
     }
@@ -312,7 +312,7 @@ export async function generateBoard(projectId: string, briefText: string, projec
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           },
           body: JSON.stringify({ queries: allQueries }),
         }
@@ -362,11 +362,11 @@ export async function parseRoomsFromText(text: string): Promise<{ name: string; 
 export interface DesignerProfile {
   id?: string;
   session_id: string;
-  style_description: string;
-  style_refs: string[];
-  hard_constraints: Record<string, any>;
-  ergonomics_rules: Record<string, any>;
-  custom_ergonomics_text?: string;
+  style_description: string | null;
+  style_refs: string[] | null;
+  hard_constraints: Record<string, any> | null;
+  ergonomics_rules: Record<string, any> | null;
+  custom_ergonomics_text: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -376,15 +376,18 @@ export async function getDesignerProfile(sessionId: string): Promise<DesignerPro
     .from("designer_profile")
     .select("*")
     .eq("session_id", sessionId)
-    .single();
-  if (error && error.code !== "PGRST116") throw error;
+    .maybeSingle();
+  if (error) throw error;
   return data;
 }
 
 export async function upsertDesignerProfile(profile: DesignerProfile): Promise<DesignerProfile> {
+  // Exclude auto-generated fields from insert/update
+  const { id, created_at, updated_at, ...profileData } = profile;
+  
   const { data, error } = await supabase
     .from("designer_profile")
-    .upsert(profile, { onConflict: "session_id" })
+    .upsert(profileData, { onConflict: "session_id" })
     .select()
     .single();
   if (error) throw error;
