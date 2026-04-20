@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
-import { Loader2, Save, ArrowLeft, Plus, X, Upload, FileText, Trash2, Sparkles } from "lucide-react";
+import { Loader2, Save, ArrowLeft, Plus, X, Upload, FileText, Trash2 } from "lucide-react";
 import { getDesignerProfile, upsertDesignerProfile, type DesignerProfile } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -43,16 +43,12 @@ const DesignerProfilePage = () => {
 
   const [profile, setProfile] = useState<DesignerProfile>({
     session_id: sessionId,
-    designer_name: "",
     style_description: "",
     style_refs: [],
     hard_constraints: {},
     ergonomics_rules: Object.fromEntries(VISUAL_SLIDERS.map(s => [s.key, 5])),
     custom_ergonomics_text: "",
   });
-
-  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [knowledgeFiles, setKnowledgeFiles] = useState<UploadedFile[]>([]);
@@ -322,77 +318,6 @@ const DesignerProfilePage = () => {
     }));
   };
 
-  // Analyze profile with OpenAI
-  const analyzeProfile = async () => {
-    if (!profile.designer_name && !profile.style_description && !profile.custom_ergonomics_text) {
-      toast.error("Заполните хотя бы одно поле профиля для анализа");
-      return;
-    }
-
-    setAnalyzing(true);
-    setAnalysisResult(null);
-
-    try {
-      const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
-      const allFiles = [...uploadedFiles, ...knowledgeFiles];
-
-      const systemPrompt = `Ты — профессиональный куратор дизайн-студии. Дизайнер заполнил свой профиль в инструменте Magic Capture. Проанализируй его профиль и ответь на русском языке в три блока:
-
-1. ЧТО Я ВИЖУ — кратко опиши стиль и подход дизайнера своими словами, как будто ты его уже хорошо знаешь (2-3 предложения, тепло и точно)
-
-2. КАК Я БУДУ ЭТО ПРИМЕНЯТЬ — конкретно опиши как эти данные повлияют на генерацию брифов и концепт-бордов для клиентов (3-4 пункта)
-
-3. ХОЧУ УТОЧНИТЬ — задай 2-3 вопроса о том, что дизайнер не упомянул но что важно для качественной работы (например: с какими объектами чаще работаете, есть ли любимые поставщики, какой типичный бюджет проекта)`;
-
-      const userPrompt = `Профиль дизайнера:
-
-Имя: ${profile.designer_name || "Не указано"}
-
-Описание стиля: ${profile.style_description || "Не заполнено"}
-
-Стандарты и ограничения: ${profile.custom_ergonomics_text || "Не заполнено"}
-
-Ссылки на референсы: ${linkRefs.length > 0 ? linkRefs.join("\n") : "Не добавлены"}
-
-Загруженные файлы: ${allFiles.length > 0 ? allFiles.map(f => f.name).join("\n") : "Нет файлов"}`;
-
-      const apiKey = import.meta.env.VITE_OPENAI_KEY;
-      if (!apiKey) {
-        throw new Error("OpenAI API key not found");
-      }
-
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt }
-          ],
-          max_tokens: 1000,
-          temperature: 0.7,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const result = data.choices?.[0]?.message?.content || "Не удалось получить анализ";
-      setAnalysisResult(result);
-    } catch (e) {
-      toast.error("Ошибка анализа профиля");
-      console.error(e);
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -410,24 +335,12 @@ const DesignerProfilePage = () => {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-display">
-              {profile.designer_name ? `Стандарты ${profile.designer_name}` : "Мои стандарты"}
-            </h1>
+            <h1 className="text-2xl font-display">Мои стандарты</h1>
             <p className="text-sm text-muted-foreground">Настройте один раз — применяется ко всем проектам</p>
           </div>
         </div>
 
         <div className="space-y-10">
-          {/* Block 0 — Designer Name */}
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Как вас зовут?</h2>
-            <Input
-              placeholder="Имя или имя и фамилия"
-              value={profile.designer_name || ""}
-              onChange={(e) => setProfile((p) => ({ ...p, designer_name: e.target.value }))}
-            />
-          </section>
-
           {/* Block 1 — Visual Language Sliders */}
           <section className="space-y-6">
             <div>
@@ -634,56 +547,12 @@ const DesignerProfilePage = () => {
             )}
           </section>
 
-          {/* Save & Analyze */}
-          <div className="pt-4 space-y-4">
-            <div className="flex gap-3">
-              <Button onClick={handleSave} disabled={saving} className="flex-1">
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {saving ? "Сохранение..." : "Сохранить профиль"}
-              </Button>
-              <Button onClick={analyzeProfile} disabled={analyzing} variant="outline" className="flex-1">
-                {analyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                {analyzing ? "Анализ..." : "Проанализировать мой профиль"}
-              </Button>
-            </div>
-
-            {/* Analysis Result */}
-            {analyzing && (
-              <div className="space-y-3">
-                <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
-                <div className="h-4 bg-muted rounded animate-pulse w-full" />
-                <div className="h-4 bg-muted rounded animate-pulse w-5/6" />
-                <div className="h-4 bg-muted rounded animate-pulse w-full" />
-                <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
-              </div>
-            )}
-
-            {analysisResult && !analyzing && (
-              <div className="bg-muted rounded-lg p-6 space-y-6">
-                {analysisResult.split(/\n\n?(?=\d+\.\s|1\.\s|2\.\s|3\.\s)/).map((section, idx) => {
-                  const titleMatch = section.match(/^(\d+\.\s*[^\n]+|ЧТО Я ВИЖУ|КАК Я БУДУ ЭТО ПРИМЕНЯТЬ|ХОЧУ УТОЧНИТЬ)/i);
-                  const title = titleMatch ? titleMatch[0].replace(/^\d+\.\s*/, '').trim() : '';
-                  const content = titleMatch ? section.replace(titleMatch[0], '').trim() : section;
-
-                  if (!title && !content) return null;
-
-                  return (
-                    <div key={idx} className="space-y-2">
-                      {title && (
-                        <h3 className="font-semibold text-primary">
-                          {title}
-                        </h3>
-                      )}
-                      {content && (
-                        <div className="text-sm whitespace-pre-wrap text-muted-foreground">
-                          {content}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+          {/* Save */}
+          <div className="pt-4">
+            <Button onClick={handleSave} disabled={saving} className="w-full">
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              {saving ? "Сохранение..." : "Сохранить профиль"}
+            </Button>
           </div>
         </div>
       </div>
