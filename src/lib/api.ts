@@ -362,6 +362,7 @@ export async function parseRoomsFromText(text: string): Promise<{ name: string; 
 export interface DesignerProfile {
   id?: string;
   session_id: string;
+  designer_name?: string | null;
   style_description: string | null;
   style_refs: string[] | null;
   hard_constraints: Record<string, any> | null;
