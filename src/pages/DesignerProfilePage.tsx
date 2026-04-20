@@ -51,7 +51,9 @@ const DesignerProfilePage = () => {
   });
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [knowledgeFiles, setKnowledgeFiles] = useState<UploadedFile[]>([]);
   const [newRef, setNewRef] = useState("");
+  const [kbDragActive, setKbDragActive] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -67,8 +69,10 @@ const DesignerProfilePage = () => {
           ref.startsWith("designer-portfolio/")
         ) || [];
         
-        // Verify files exist before creating URLs
-        const files: UploadedFile[] = [];
+        // Separate portfolio files (images) from knowledge base files (pdf/doc/txt)
+        const portfolioFiles: UploadedFile[] = [];
+        const kbFiles: UploadedFile[] = [];
+        
         for (const path of filePaths) {
           try {
             const { data: fileData } = await supabase.storage
@@ -77,18 +81,26 @@ const DesignerProfilePage = () => {
             const fileExists = fileData?.some(f => path.endsWith(f.name));
             if (fileExists) {
               const { data } = supabase.storage.from("designer-portfolio").getPublicUrl(path);
-              files.push({
+              const file = {
                 path,
                 name: path.split("/").pop() || "",
                 url: data.publicUrl,
-              });
+              };
+              // Categorize by extension
+              const ext = file.name.toLowerCase();
+              if (ext.endsWith('.pdf') || ext.endsWith('.doc') || ext.endsWith('.docx') || ext.endsWith('.txt')) {
+                kbFiles.push(file);
+              } else {
+                portfolioFiles.push(file);
+              }
             }
           } catch {
             // Skip files that can't be verified
             console.warn(`Could not verify file: ${path}`);
           }
         }
-        setUploadedFiles(files);
+        setUploadedFiles(portfolioFiles);
+        setKnowledgeFiles(kbFiles);
       }
     } catch (e) {
       console.error("Error loading profile:", e);
@@ -100,12 +112,13 @@ const DesignerProfilePage = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Combine uploaded file paths with link references
-      const filePaths = uploadedFiles.map(f => f.path);
+      // Combine portfolio files, knowledge files and link references
+      const portfolioPaths = uploadedFiles.map(f => f.path);
+      const kbPaths = knowledgeFiles.map(f => f.path);
       const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
       await upsertDesignerProfile({
         ...profile,
-        style_refs: [...filePaths, ...linkRefs],
+        style_refs: [...portfolioPaths, ...kbPaths, ...linkRefs],
       });
       toast.success("Профиль сохранен");
     } catch (e) {
@@ -208,6 +221,85 @@ const DesignerProfilePage = () => {
       return;
     }
     setUploadedFiles((prev) => prev.filter(f => f.path !== file.path));
+  };
+
+  // Knowledge base files upload (PDF, DOC, TXT)
+  const [kbUploading, setKbUploading] = useState(false);
+
+  const handleKbDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setKbDragActive(true);
+    } else if (e.type === "dragleave") {
+      setKbDragActive(false);
+    }
+  }, []);
+
+  const uploadKnowledgeFiles = async (files: File[]) => {
+    const validTypes = [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/plain"
+    ];
+    const validFiles = files.filter(f => validTypes.includes(f.type));
+
+    if (validFiles.length === 0) {
+      toast.error("Поддерживаются только PDF, DOC, DOCX и TXT");
+      return;
+    }
+
+    // Check file size (20 MB max)
+    const oversized = validFiles.filter(f => f.size > 20 * 1024 * 1024);
+    if (oversized.length > 0) {
+      toast.error("Файлы превышают 20 МБ");
+      return;
+    }
+
+    setKbUploading(true);
+    const newFiles: UploadedFile[] = [];
+
+    for (const file of validFiles) {
+      const safeName = sanitizeFilename(file.name);
+      const filePath = `${sessionId}/kb_${Date.now()}_${safeName}`;
+      const { error } = await supabase.storage
+        .from("designer-portfolio")
+        .upload(filePath, file, { upsert: true });
+
+      if (error) {
+        toast.error(`Ошибка загрузки ${file.name}`);
+        console.error(error);
+      } else {
+        const { data } = supabase.storage.from("designer-portfolio").getPublicUrl(filePath);
+        newFiles.push({ path: filePath, name: file.name, url: data.publicUrl });
+      }
+    }
+
+    setKnowledgeFiles((prev) => [...prev, ...newFiles]);
+    setKbUploading(false);
+  };
+
+  const handleKbDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setKbDragActive(false);
+    const files = Array.from(e.dataTransfer.files);
+    await uploadKnowledgeFiles(files);
+  }, [sessionId]);
+
+  const handleKbFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    await uploadKnowledgeFiles(files);
+  };
+
+  const removeKnowledgeFile = async (file: UploadedFile) => {
+    const { error } = await supabase.storage.from("designer-portfolio").remove([file.path]);
+    if (error) {
+      toast.error("Ошибка удаления файла");
+      return;
+    }
+    setKnowledgeFiles((prev) => prev.filter(f => f.path !== file.path));
   };
 
   const addRef = () => {
@@ -383,6 +475,76 @@ const DesignerProfilePage = () => {
                   </div>
                 ))}
             </div>
+          </section>
+
+          {/* Block 5 — Standards and Constraints */}
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold">Мои стандарты и ограничения</h2>
+              <p className="text-sm text-muted-foreground">Правила, которые вы всегда применяете в работе</p>
+            </div>
+            <Textarea
+              placeholder="Например: не использую ламинат и натяжные потолки, рабочий треугольник обязателен на кухне, минимальный проход 90 см, всегда предусматриваю хранение у входа..."
+              value={profile.custom_ergonomics_text || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, custom_ergonomics_text: e.target.value }))}
+              className="min-h-[120px]"
+            />
+          </section>
+
+          {/* Block 6 — Knowledge Base */}
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold">База знаний</h2>
+              <p className="text-sm text-muted-foreground">Загрузите курс, методичку или свои наработки — AI извлечёт стандарты автоматически</p>
+            </div>
+            <div
+              onDragEnter={handleKbDrag}
+              onDragLeave={handleKbDrag}
+              onDragOver={handleKbDrag}
+              onDrop={handleKbDrop}
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                kbDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25"
+              }`}
+            >
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.txt"
+                onChange={handleKbFileInput}
+                className="hidden"
+                id="knowledge-upload"
+              />
+              <label htmlFor="knowledge-upload" className="cursor-pointer block">
+                <Upload className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                <p className="text-sm font-medium mb-1">Перетащите файлы сюда или кликните для выбора</p>
+                <p className="text-xs text-muted-foreground">PDF, DOC, DOCX, TXT до 20 МБ</p>
+              </label>
+              {kbUploading && (
+                <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Загрузка...
+                </div>
+              )}
+            </div>
+            {/* Knowledge files list */}
+            {knowledgeFiles.length > 0 && (
+              <div className="space-y-2 mt-4">
+                {knowledgeFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-muted px-3 py-2 rounded-lg">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-sm truncate">{file.name}</span>
+                    </div>
+                    <button
+                      onClick={() => removeKnowledgeFile(file)}
+                      className="p-1 text-muted-foreground hover:text-destructive flex-shrink-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Save */}
