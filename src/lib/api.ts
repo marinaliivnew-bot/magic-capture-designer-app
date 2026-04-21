@@ -368,6 +368,8 @@ export interface DesignerProfile {
   hard_constraints: Record<string, any> | null;
   ergonomics_rules: Record<string, any> | null;
   custom_ergonomics_text: string | null;
+  ai_analysis?: string | null;
+  ai_questions?: string[] | null;
   created_at?: string;
   updated_at?: string;
 }

@@ -54,6 +54,9 @@ const DesignerProfilePage = () => {
 
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [aiQuestions, setAiQuestions] = useState<string[]>([]);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [updatingAnalysis, setUpdatingAnalysis] = useState(false);
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [knowledgeFiles, setKnowledgeFiles] = useState<UploadedFile[]>([]);
@@ -63,6 +66,60 @@ const DesignerProfilePage = () => {
   useEffect(() => {
     loadProfile();
   }, [sessionId]);
+
+  // Load all files from storage bucket for this session
+  const loadFilesFromStorage = async () => {
+    try {
+      const { data: files, error } = await supabase.storage
+        .from("designer-portfolio")
+        .list(sessionId);
+      
+      if (error) {
+        console.error("[loadFiles] Error listing files:", error);
+        return;
+      }
+      
+      if (!files || files.length === 0) {
+        setUploadedFiles([]);
+        setKnowledgeFiles([]);
+        return;
+      }
+      
+      const portfolioFiles: UploadedFile[] = [];
+      const kbFiles: UploadedFile[] = [];
+      
+      for (const file of files) {
+        const path = `${sessionId}/${file.name}`;
+        const { data: urlData } = supabase.storage.from("designer-portfolio").getPublicUrl(path);
+        
+        const uploadedFile: UploadedFile = {
+          path,
+          name: file.name,
+          url: urlData.publicUrl,
+        };
+        
+        // Categorize by prefix
+        if (file.name.startsWith("portfolio_")) {
+          portfolioFiles.push(uploadedFile);
+        } else if (file.name.startsWith("kb_")) {
+          kbFiles.push(uploadedFile);
+        } else {
+          // Fallback: categorize by extension
+          const ext = file.name.toLowerCase();
+          if (ext.endsWith('.pdf') || ext.endsWith('.doc') || ext.endsWith('.docx') || ext.endsWith('.txt')) {
+            kbFiles.push(uploadedFile);
+          } else {
+            portfolioFiles.push(uploadedFile);
+          }
+        }
+      }
+      
+      setUploadedFiles(portfolioFiles);
+      setKnowledgeFiles(kbFiles);
+    } catch (err) {
+      console.error("[loadFiles] Error:", err);
+    }
+  };
 
   const loadProfile = async () => {
     console.log("[loadProfile] Starting with sessionId:", sessionId);
@@ -75,60 +132,29 @@ const DesignerProfilePage = () => {
         setProfile((prev) => ({
           ...prev,
           ...data,
-          session_id: sessionId, // ensure session_id is always set
+          session_id: sessionId,
+          // Ensure arrays are arrays
+          style_refs: Array.isArray(data.style_refs) ? data.style_refs : [],
+          hard_constraints: data.hard_constraints || {},
+          ergonomics_rules: data.ergonomics_rules || prev.ergonomics_rules,
         }));
-        console.log("[loadProfile] Profile updated:", data.designer_name, data.style_description);
         
-        // Parse uploaded files from style_refs (filter out URLs that start with http)
-        const filePaths = (data.style_refs || []).filter((ref: string) => 
-          typeof ref === 'string' && ref.startsWith("designer-portfolio/")
-        );
-        console.log("[loadProfile] File paths found:", filePaths.length);
-        
-        // Separate portfolio files (images) from knowledge base files (pdf/doc/txt)
-        const portfolioFiles: UploadedFile[] = [];
-        const kbFiles: UploadedFile[] = [];
-        
-        for (const path of filePaths) {
-          try {
-            const folder = path.split("/").slice(0, -1).join("/");
-            const fileName = path.split("/").pop() || "";
-            
-            const { data: fileData } = await supabase.storage
-              .from("designer-portfolio")
-              .list(folder || sessionId);
-            
-            const fileExists = fileData?.some(f => f.name === fileName);
-            
-            if (fileExists) {
-              const { data: urlData } = supabase.storage.from("designer-portfolio").getPublicUrl(path);
-              const file: UploadedFile = {
-                path,
-                name: fileName,
-                url: urlData.publicUrl,
-              };
-              
-              // Categorize by extension
-              const ext = file.name.toLowerCase();
-              if (ext.endsWith('.pdf') || ext.endsWith('.doc') || ext.endsWith('.docx') || ext.endsWith('.txt')) {
-                kbFiles.push(file);
-              } else {
-                portfolioFiles.push(file);
-              }
-            } else {
-              console.warn(`[loadProfile] File not found in storage: ${path}`);
-            }
-          } catch (err) {
-            console.warn(`[loadProfile] Error verifying file ${path}:`, err);
-          }
+        // Load saved AI analysis
+        if (data.ai_analysis) {
+          setAnalysisResult(data.ai_analysis);
+        }
+        if (data.ai_questions) {
+          setAiQuestions(Array.isArray(data.ai_questions) ? data.ai_questions : []);
         }
         
-        console.log("[loadProfile] Portfolio files:", portfolioFiles.length, "KB files:", kbFiles.length);
-        setUploadedFiles(portfolioFiles);
-        setKnowledgeFiles(kbFiles);
+        console.log("[loadProfile] Profile loaded:", data.designer_name);
       } else {
         console.log("[loadProfile] No data found for sessionId:", sessionId);
       }
+      
+      // Load files from storage
+      await loadFilesFromStorage();
+      
     } catch (e) {
       console.error("[loadProfile] Error:", e);
       toast.error("Ошибка загрузки профиля");
@@ -211,7 +237,7 @@ const DesignerProfilePage = () => {
 
     for (const file of validFiles) {
       const safeName = sanitizeFilename(file.name);
-      const filePath = `${sessionId}/${Date.now()}_${safeName}`;
+      const filePath = `${sessionId}/portfolio_${Date.now()}_${safeName}`;
       const { error } = await supabase.storage
         .from("designer-portfolio")
         .upload(filePath, file, { upsert: true });
@@ -249,6 +275,7 @@ const DesignerProfilePage = () => {
       return;
     }
     setUploadedFiles((prev) => prev.filter(f => f.path !== file.path));
+    toast.success("Файл удалён");
   };
 
   // Knowledge base files upload (PDF, DOC, TXT)
@@ -328,6 +355,7 @@ const DesignerProfilePage = () => {
       return;
     }
     setKnowledgeFiles((prev) => prev.filter(f => f.path !== file.path));
+    toast.success("Файл удалён");
   };
 
   const addRef = () => {
@@ -344,6 +372,32 @@ const DesignerProfilePage = () => {
       ...prev,
       style_refs: (prev.style_refs || []).filter((_, i) => i !== idx),
     }));
+  };
+
+  // Extract questions from AI analysis text
+  const extractQuestions = (text: string): string[] => {
+    const questions: string[] = [];
+    const lines = text.split('\n');
+    let inQuestionsSection = false;
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.includes('ХОЧУ УТОЧНИТЬ') || trimmed.includes('3.')) {
+        inQuestionsSection = true;
+        continue;
+      }
+      if (inQuestionsSection && trimmed) {
+        // Look for question patterns (starting with number, dash, or just ending with ?)
+        if (trimmed.match(/^\d+\.|^-\s*|.*\?$/)) {
+          const question = trimmed.replace(/^\d+\.\s*/, '').replace(/^-\s*/, '').trim();
+          if (question && question.length > 10) {
+            questions.push(question);
+          }
+        }
+      }
+    }
+    
+    return questions.slice(0, 3); // Max 3 questions
   };
 
   // Analyze profile with OpenAI
@@ -383,7 +437,7 @@ const DesignerProfilePage = () => {
         body: JSON.stringify({
           model: "gpt-4o",
           messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-          max_tokens: 1000,
+          max_tokens: 1500,
           temperature: 0.7,
         }),
       });
@@ -391,12 +445,82 @@ const DesignerProfilePage = () => {
       if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
 
       const data = await response.json();
-      setAnalysisResult(data.choices?.[0]?.message?.content || "Не удалось получить анализ");
+      const analysisText = data.choices?.[0]?.message?.content || "Не удалось получить анализ";
+      
+      setAnalysisResult(analysisText);
+      
+      // Extract questions from analysis
+      const questions = extractQuestions(analysisText);
+      setAiQuestions(questions);
+      
+      // Save to database
+      await upsertDesignerProfile({
+        ...profile,
+        ai_analysis: analysisText,
+        ai_questions: questions,
+      });
+      
+      toast.success("Анализ сохранён");
     } catch (e) {
       toast.error("Ошибка анализа профиля");
       console.error(e);
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  // Update analysis with designer answers
+  const updateAnalysisWithAnswers = async () => {
+    if (Object.keys(answers).length === 0) {
+      toast.error("Сначала ответьте на вопросы");
+      return;
+    }
+
+    setUpdatingAnalysis(true);
+    
+    try {
+      // Build Q&A text
+      const qaText = Object.entries(answers)
+        .map(([idx, answer]) => `${parseInt(idx) + 1}. ${aiQuestions[parseInt(idx)]}\nОтвет: ${answer}`)
+        .join('\n\n');
+
+      const systemPrompt = `Ты — профессиональный куратор дизайн-студии. Дизайнер ответил на уточняющие вопросы. Обнови секции "ЧТО Я ВИЖУ" и "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ" с учётом новых данных.`;
+
+      const userPrompt = `Вопросы и ответы дизайнера:\n${qaText}\n\nИсходный анализ:\n${analysisResult}\n\nОбнови анализ, сохранив структуру с тремя секциями.`;
+
+      const apiKey = import.meta.env.VITE_OPENAI_KEY;
+      if (!apiKey) throw new Error("OpenAI API key not found");
+
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+          max_tokens: 1500,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
+
+      const data = await response.json();
+      const updatedAnalysis = data.choices?.[0]?.message?.content || analysisResult;
+      
+      setAnalysisResult(updatedAnalysis);
+      
+      // Save to database
+      await upsertDesignerProfile({
+        ...profile,
+        ai_analysis: updatedAnalysis,
+      });
+      
+      toast.success("Анализ обновлён с учётом ваших ответов");
+    } catch (e) {
+      toast.error("Ошибка обновления анализа");
+      console.error(e);
+    } finally {
+      setUpdatingAnalysis(false);
     }
   };
 
@@ -663,11 +787,91 @@ const DesignerProfilePage = () => {
               </div>
             )}
 
+            {updatingAnalysis && (
+              <div className="space-y-3">
+                <div className="h-3 bg-primary/20 rounded animate-pulse w-full" />
+                <p className="text-sm text-muted-foreground text-center">Обновляем анализ с учётом ваших ответов...</p>
+              </div>
+            )}
+
             {analysisResult && !analyzing && (
-              <div className="bg-muted rounded-lg p-6 space-y-4">
-                <h3 className="font-semibold">Анализ профиля</h3>
-                <div className="text-sm whitespace-pre-wrap text-muted-foreground">
-                  {analysisResult}
+              <div className="space-y-6">
+                {/* Section 1: What I See */}
+                <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
+                  <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Что я вижу</h3>
+                  <div className="text-[15px] leading-relaxed text-[#2D2D2D]" style={{ color: '#2D2D2D' }}>
+                    {(() => {
+                      const section = analysisResult.split(/\d+\.\s*ЧТО Я ВИЖУ|ЧТО Я ВИЖУ/)[1]?.split(/\d+\.\s*КАК Я БУДУ|КАК Я БУДУ/)[0] || '';
+                      return section.replace(/\*\*/g, '').trim() || analysisResult.split('\n').slice(0, 5).join('\n').replace(/\*\*/g, '');
+                    })()}
+                  </div>
+                </div>
+
+                {/* Section 2: How I'll Apply */}
+                <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
+                  <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Как я буду это применять</h3>
+                  <div className="text-[15px] leading-relaxed text-[#2D2D2D] space-y-2" style={{ color: '#2D2D2D' }}>
+                    {(() => {
+                      const section = analysisResult.split(/\d+\.\s*КАК Я БУДУ|КАК Я БУДУ/)[1]?.split(/\d+\.\s*ХОЧУ УТОЧНИТЬ|ХОЧУ УТОЧНИТЬ/)[0] || '';
+                      const cleanSection = section.replace(/\*\*/g, '').trim();
+                      // Split by newlines and filter out empty lines
+                      return cleanSection.split('\n').filter(line => line.trim()).map((line, i) => (
+                        <p key={i} className="flex items-start gap-2">
+                          <span className="text-primary mt-1">•</span>
+                          <span>{line.replace(/^-\s*/, '').trim()}</span>
+                        </p>
+                      ));
+                    })()}
+                  </div>
+                </div>
+
+                {/* Section 3: Questions */}
+                <div className="bg-[#F8F6F3] border border-[#D4C8B8] rounded-xl p-6 shadow-sm">
+                  <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Хочу уточнить</h3>
+                  
+                  {aiQuestions.length > 0 ? (
+                    <div className="space-y-4">
+                      {aiQuestions.map((question, idx) => (
+                        <div key={idx} className="space-y-2">
+                          <p className="text-[15px] text-[#2D2D2D] font-medium">
+                            {idx + 1}. {question.replace(/\*\*/g, '').trim()}
+                          </p>
+                          <Input
+                            placeholder="Ваш ответ..."
+                            value={answers[idx] || ""}
+                            onChange={(e) => setAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                            className="bg-white text-[15px]"
+                          />
+                        </div>
+                      ))}
+                      
+                      <Button 
+                        onClick={updateAnalysisWithAnswers}
+                        disabled={updatingAnalysis || Object.keys(answers).length === 0}
+                        className="w-full mt-4"
+                      >
+                        {updatingAnalysis ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Обновление...</>
+                        ) : (
+                          <><Sparkles className="mr-2 h-4 w-4" /> Сохранить ответы и обновить анализ</>
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="text-[15px] leading-relaxed text-[#2D2D2D] space-y-3">
+                      {(() => {
+                        const section = analysisResult.split(/\d+\.\s*ХОЧУ УТОЧНИТЬ|ХОЧУ УТОЧНИТЬ/)[1] || '';
+                        const cleanSection = section.replace(/\*\*/g, '').trim();
+                        // Try to extract numbered questions
+                        const lines = cleanSection.split('\n').filter(line => line.trim());
+                        return lines.map((line, i) => (
+                          <p key={i} className="text-[15px] text-[#2D2D2D]">
+                            {line.match(/^\d+\./) ? line : `${i + 1}. ${line}`}
+                          </p>
+                        ));
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
