@@ -65,14 +65,25 @@ const DesignerProfilePage = () => {
   }, [sessionId]);
 
   const loadProfile = async () => {
+    console.log("[loadProfile] Starting with sessionId:", sessionId);
     try {
       const data = await getDesignerProfile(sessionId);
+      console.log("[loadProfile] Received data:", data);
+      
       if (data) {
-        setProfile(data);
+        // Merge with existing profile to preserve any defaults not in DB
+        setProfile((prev) => ({
+          ...prev,
+          ...data,
+          session_id: sessionId, // ensure session_id is always set
+        }));
+        console.log("[loadProfile] Profile updated:", data.designer_name, data.style_description);
+        
         // Parse uploaded files from style_refs (filter out URLs that start with http)
-        const filePaths = data.style_refs?.filter((ref: string) => 
-          ref.startsWith("designer-portfolio/")
-        ) || [];
+        const filePaths = (data.style_refs || []).filter((ref: string) => 
+          typeof ref === 'string' && ref.startsWith("designer-portfolio/")
+        );
+        console.log("[loadProfile] File paths found:", filePaths.length);
         
         // Separate portfolio files (images) from knowledge base files (pdf/doc/txt)
         const portfolioFiles: UploadedFile[] = [];
@@ -80,17 +91,23 @@ const DesignerProfilePage = () => {
         
         for (const path of filePaths) {
           try {
+            const folder = path.split("/").slice(0, -1).join("/");
+            const fileName = path.split("/").pop() || "";
+            
             const { data: fileData } = await supabase.storage
               .from("designer-portfolio")
-              .list(path.split("/").slice(0, -1).join("/"));
-            const fileExists = fileData?.some(f => path.endsWith(f.name));
+              .list(folder || sessionId);
+            
+            const fileExists = fileData?.some(f => f.name === fileName);
+            
             if (fileExists) {
-              const { data } = supabase.storage.from("designer-portfolio").getPublicUrl(path);
-              const file = {
+              const { data: urlData } = supabase.storage.from("designer-portfolio").getPublicUrl(path);
+              const file: UploadedFile = {
                 path,
-                name: path.split("/").pop() || "",
-                url: data.publicUrl,
+                name: fileName,
+                url: urlData.publicUrl,
               };
+              
               // Categorize by extension
               const ext = file.name.toLowerCase();
               if (ext.endsWith('.pdf') || ext.endsWith('.doc') || ext.endsWith('.docx') || ext.endsWith('.txt')) {
@@ -98,17 +115,23 @@ const DesignerProfilePage = () => {
               } else {
                 portfolioFiles.push(file);
               }
+            } else {
+              console.warn(`[loadProfile] File not found in storage: ${path}`);
             }
-          } catch {
-            // Skip files that can't be verified
-            console.warn(`Could not verify file: ${path}`);
+          } catch (err) {
+            console.warn(`[loadProfile] Error verifying file ${path}:`, err);
           }
         }
+        
+        console.log("[loadProfile] Portfolio files:", portfolioFiles.length, "KB files:", kbFiles.length);
         setUploadedFiles(portfolioFiles);
         setKnowledgeFiles(kbFiles);
+      } else {
+        console.log("[loadProfile] No data found for sessionId:", sessionId);
       }
     } catch (e) {
-      console.error("Error loading profile:", e);
+      console.error("[loadProfile] Error:", e);
+      toast.error("Ошибка загрузки профиля");
     } finally {
       setLoading(false);
     }
