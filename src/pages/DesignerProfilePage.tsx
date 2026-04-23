@@ -411,23 +411,48 @@ const DesignerProfilePage = () => {
     setAnalysisResult(null);
 
     try {
-      const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
+     const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
       const allFiles = [...uploadedFiles, ...knowledgeFiles];
 
-      const systemPrompt = `Ты — профессиональный куратор дизайн-студии. Дизайнер заполнил свой профиль в инструменте Magic Capture. Проанализируй его профиль и ответь на русском языке в три блока:
+      // Extract text from knowledge base files
+      const extractedTexts = await Promise.all(
+        knowledgeFiles.map(async (file) => {
+          try {
+            const { data, error } = await supabase.functions.invoke('extract-text', {
+              body: { filePath: file.path }
+            });
+            if (error || !data?.text) return `[${file.name}]: текст недоступен`;
+            return `[${file.name}]:\n${data.text}`;
+          } catch {
+            return `[${file.name}]: ошибка чтения`;
+          }
+        })
+      );
 
-1. ЧТО Я ВИЖУ — кратко опиши стиль и подход дизайнера своими словами, как будто ты его уже хорошо знаешь (2-3 предложения, тепло и точно)
+      const knowledgeBaseText = extractedTexts.length > 0
+        ? `\n\nБАЗА ЗНАНИЙ ДИЗАЙНЕРА (содержимое загруженных документов):\n${extractedTexts.join('\n\n---\n\n')}`
+        : '';
 
-2. КАК Я БУДУ ЭТО ПРИМЕНЯТЬ — конкретно опиши как эти данные повлияют на генерацию брифов и концепт-бордов для клиентов (3-4 пункта)
+      const systemPrompt = `Ты — профессиональный куратор дизайн-студии. Дизайнер заполнил профиль в инструменте Magic Capture.
 
-3. ХОЧУ УТОЧНИТЬ — задай 2-3 вопроса о том, что дизайнер не упомянул но что важно для качественной работы`;
+ВАЖНО: если в сообщении есть раздел "БАЗА ЗНАНИЙ ДИЗАЙНЕРА" — прочитай его ПОЛНОСТЬЮ до начала анализа. Это реальные документы дизайнера — методички, курсы, наработки. Информацию из них считай уже известной и НЕ задавай вопросы по темам, которые там освещены.
+
+Ответь на русском языке в три блока:
+
+1. ЧТО Я ВИЖУ — кратко опиши стиль и подход дизайнера своими словами, опираясь в том числе на содержимое его документов (2-3 предложения)
+
+2. КАК Я БУДУ ЭТО ПРИМЕНЯТЬ — конкретно как эти данные повлияют на генерацию брифов и концепт-бордов (3-4 пункта)
+
+3. ХОЧУ УТОЧНИТЬ — задай 2-3 вопроса ТОЛЬКО о том, чего НЕТ ни в профиле, ни в загруженных документах. Если всё понятно — можно задать 1 вопрос или не задавать совсем.`;
 
       const userPrompt = `Имя: ${profile.designer_name || "Не указано"}
 Описание стиля: ${profile.style_description || "Не заполнено"}
-Стандарты: ${profile.custom_ergonomics_text || "Не заполнено"}
-Референсы: ${linkRefs.length > 0 ? linkRefs.join("\n") : "Нет"}
-Файлы: ${allFiles.length > 0 ? allFiles.map(f => f.name).join("\n") : "Нет"}`;
+Визуальный язык (шкалы 1-10): ${Object.entries(profile.ergonomics_rules || {}).map(([k,v]) => `${k}: ${v}`).join(', ')}
+Стандарты и ограничения: ${profile.custom_ergonomics_text || "Не заполнено"}
+Ссылки на референсы: ${linkRefs.length > 0 ? linkRefs.join(", ") : "Нет"}
+Портфолио (файлы): ${uploadedFiles.map(f => f.name).join(", ") || "Нет"}${knowledgeBaseText}`;
 
+     
       const apiKey = import.meta.env.VITE_OPENAI_KEY;
       if (!apiKey) throw new Error("OpenAI API key not found");
 
