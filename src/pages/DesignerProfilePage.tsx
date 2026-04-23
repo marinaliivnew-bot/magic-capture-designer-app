@@ -389,7 +389,7 @@ const DesignerProfilePage = () => {
       if (inQuestionsSection && trimmed) {
         // Look for question patterns (starting with number, dash, or just ending with ?)
         if (trimmed.match(/^\d+\.|^-\s*|.*\?$/)) {
-          const question = trimmed.replace(/^\d+\.\s*/, '').replace(/^-\s*/, '').trim();
+          const question = trimmed.replace(/^\d+\.\s*/, '').replace(/^-\s*-?\s*/, '').trim();
           if (question && question.length > 10) {
             questions.push(question);
           }
