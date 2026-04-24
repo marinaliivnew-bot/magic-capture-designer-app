@@ -94,6 +94,8 @@ const ALLOWED_BRIEF_FIELDS = [
   "constraints_practical",
   "success_criteria",
   "completeness_score",
+  "user_refs",
+  "style_narrowing_result",
 ];
 
 export async function upsertBrief(projectId: string, fields: Record<string, any>) {
