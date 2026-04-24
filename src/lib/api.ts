@@ -242,11 +242,45 @@ export async function updateBoardImage(imageId: string, fields: { url?: string; 
   if (error) throw error;
 }
 
+const VISUAL_SLIDER_LABELS: Record<string, [string, string]> = {
+  temperature: ["Холодно", "Тепло"],
+  strictness: ["Строго", "Свободно"],
+  texture: ["Просто", "Фактурно"],
+  color: ["Монохром", "Цветно"],
+  style: ["Классика", "Авангард"],
+};
+
+function formatDesignerProfileForAI(profile: DesignerProfile | null): string {
+  if (!profile) return "";
+  const parts: string[] = [];
+  if (profile.designer_name) parts.push(`Дизайнер: ${profile.designer_name}`);
+  if (profile.style_description) parts.push(`Стиль: ${profile.style_description}`);
+  if (profile.custom_ergonomics_text) parts.push(`Ограничения и стандарты:\n${profile.custom_ergonomics_text}`);
+  if (profile.ergonomics_rules) {
+    const sliders = Object.entries(profile.ergonomics_rules)
+      .map(([key, val]) => {
+        const [left, right] = VISUAL_SLIDER_LABELS[key] || [key, ""];
+        return `  ${left} ↔ ${right}: ${val}/10`;
+      })
+      .join("\n");
+    if (sliders) parts.push(`Визуальный язык:\n${sliders}`);
+  }
+  if (profile.ai_analysis) {
+    const shortAnalysis = profile.ai_analysis.split("\n").slice(0, 10).join("\n");
+    parts.push(`Резюме AI по стилю дизайнера:\n${shortAnalysis}`);
+  }
+  return parts.join("\n\n");
+}
+
 // AI Analysis
 export async function analyzeBrief(projectId: string, briefText: string, projectContext?: string) {
-  // Fetch user refs from brief
-  const brief = await getBrief(projectId);
+  // Fetch user refs from brief and designer profile in parallel
+  const [brief, designerProfile] = await Promise.all([
+    getBrief(projectId),
+    getDesignerProfile(getSessionId()),
+  ]);
   const userRefs = (brief as any)?.user_refs || [];
+  const designerProfileText = formatDesignerProfileForAI(designerProfile);
 
   const resp = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-brief`,
@@ -256,7 +290,7 @@ export async function analyzeBrief(projectId: string, briefText: string, project
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify({ briefText, projectContext, userRefs }),
+      body: JSON.stringify({ briefText, projectContext, userRefs, designerProfileText }),
     }
   );
   if (!resp.ok) {
@@ -274,8 +308,12 @@ export async function analyzeBrief(projectId: string, briefText: string, project
 
 // Board generation
 export async function generateBoard(projectId: string, briefText: string, projectContext?: string) {
-  const brief = await getBrief(projectId);
+  const [brief, designerProfile] = await Promise.all([
+    getBrief(projectId),
+    getDesignerProfile(getSessionId()),
+  ]);
   const userRefs = (brief as any)?.user_refs || [];
+  const designerProfileText = formatDesignerProfileForAI(designerProfile);
 
   const resp = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-board`,
@@ -285,7 +323,7 @@ export async function generateBoard(projectId: string, briefText: string, projec
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify({ briefText, projectContext, userRefs }),
+      body: JSON.stringify({ briefText, projectContext, userRefs, designerProfileText }),
     }
   );
   if (!resp.ok) {

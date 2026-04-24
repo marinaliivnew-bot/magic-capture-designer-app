@@ -6,11 +6,15 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-session-id",
 };
 
-const SYSTEM_PROMPT = `Ты — опытный дизайнер интерьера. Принимай конкретные дизайнерские решения 
+const SYSTEM_PROMPT = `Ты — опытный дизайнер интерьера. Принимай конкретные дизайнерские решения
 на основе брифа. Не пересказывай бриф — интерпретируй его.
 
-ВАЖНО: В брифе есть поле "табу" (style_dislikes). Ни один search_query 
-не должен противоречить табу. Например, если табу "без золота" — 
+ВАЖНО: Если в запросе есть раздел "СТАНДАРТЫ ДИЗАЙНЕРА" — они имеют наивысший приоритет.
+Борд должен отражать авторский стиль дизайнера, адаптированный к пожеланиям клиента.
+Стандарты дизайнера перекрывают общие предпочтения клиента там, где они пересекаются.
+
+ВАЖНО: В брифе есть поле "табу" (style_dislikes). Ни один search_query
+не должен противоречить табу. Например, если табу "без золота" —
 не используй gold, brass, golden в запросах.
 
 Создай ровно 5 блоков. Для каждого — своя логика:
@@ -78,7 +82,7 @@ serve(async (req) => {
   }
 
   try {
-    const { briefText, projectContext, userRefs } = await req.json();
+    const { briefText, projectContext, userRefs, designerProfileText } = await req.json();
 
     // Supabase Edge Functions не знают `import.meta.env`, поэтому берем ключ из env.
     // Ожидаем имя переменной как в Vite-конфигах: VITE_OPENAI_KEY (с fallback).
@@ -94,7 +98,11 @@ serve(async (req) => {
       ? `\n\n## Пользовательские референсы\nПользователь загрузил свои референсы. Учитывай их стилистику при генерации концепт-борда.\n${userRefs.map((r: { url: string; step?: string }) => `- [${r.step || "ref"}] ${r.url}`).join("\n")}`
       : "";
 
-    const userPrompt = `## Контекст проекта
+    const designerBlock = designerProfileText
+      ? `## СТАНДАРТЫ ДИЗАЙНЕРА (наивысший приоритет)\n${designerProfileText}\n\n`
+      : "";
+
+    const userPrompt = `${designerBlock}## Контекст проекта
 ${projectContext || "Не указан"}
 
 ## Бриф

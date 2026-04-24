@@ -367,10 +367,10 @@ const DesignerProfilePage = () => {
     setNewRef("");
   };
 
-  const removeRef = (idx: number) => {
+  const removeRef = (ref: string) => {
     setProfile((prev) => ({
       ...prev,
-      style_refs: (prev.style_refs || []).filter((_, i) => i !== idx),
+      style_refs: (prev.style_refs || []).filter((r) => r !== ref),
     }));
   };
 
@@ -707,12 +707,12 @@ const DesignerProfilePage = () => {
             <div className="flex flex-wrap gap-2">
               {(profile.style_refs || [])
                 .filter((ref: string) => ref.startsWith("http"))
-                .map((ref: string, i: number) => (
-                  <div key={i} className="flex items-center gap-1 bg-muted px-3 py-1 rounded-full text-sm">
+                .map((ref: string) => (
+                  <div key={ref} className="flex items-center gap-1 bg-muted px-3 py-1 rounded-full text-sm">
                     <a href={ref} target="_blank" rel="noreferrer" className="truncate max-w-[200px]">
                       {ref}
                     </a>
-                    <button onClick={() => removeRef(i)} className="text-muted-foreground hover:text-destructive">
+                    <button onClick={() => removeRef(ref)} className="text-muted-foreground hover:text-destructive">
                       <X className="h-3 w-3" />
                     </button>
                   </div>
