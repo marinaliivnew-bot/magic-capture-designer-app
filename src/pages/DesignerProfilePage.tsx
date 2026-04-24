@@ -411,8 +411,7 @@ const DesignerProfilePage = () => {
     setAnalysisResult(null);
 
     try {
-     const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
-      const allFiles = [...uploadedFiles, ...knowledgeFiles];
+      const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
 
       // Extract text from knowledge base files
       const extractedTexts = await Promise.all(
@@ -452,25 +451,13 @@ const DesignerProfilePage = () => {
 Ссылки на референсы: ${linkRefs.length > 0 ? linkRefs.join(", ") : "Нет"}
 Портфолио (файлы): ${uploadedFiles.map(f => f.name).join(", ") || "Нет"}${knowledgeBaseText}`;
 
-     
-      const apiKey = import.meta.env.VITE_OPENAI_KEY;
-      if (!apiKey) throw new Error("OpenAI API key not found");
-
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-          max_tokens: 1500,
-          temperature: 0.7,
-        }),
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('analyze-profile', {
+        body: { systemPrompt, userPrompt },
       });
 
-      if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
+      if (fnError || !fnData?.text) throw new Error(fnError?.message || "Нет ответа от AI");
 
-      const data = await response.json();
-      const analysisText = data.choices?.[0]?.message?.content || "Не удалось получить анализ";
+      const analysisText = fnData.text || "Не удалось получить анализ";
       
       setAnalysisResult(analysisText);
       
@@ -513,24 +500,13 @@ const DesignerProfilePage = () => {
 
       const userPrompt = `Вопросы и ответы дизайнера:\n${qaText}\n\nИсходный анализ:\n${analysisResult}\n\nОбнови анализ, сохранив структуру с тремя секциями.`;
 
-      const apiKey = import.meta.env.VITE_OPENAI_KEY;
-      if (!apiKey) throw new Error("OpenAI API key not found");
-
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-          max_tokens: 1500,
-          temperature: 0.7,
-        }),
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('analyze-profile', {
+        body: { systemPrompt, userPrompt },
       });
 
-      if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
+      if (fnError || !fnData?.text) throw new Error(fnError?.message || "Нет ответа от AI");
 
-      const data = await response.json();
-      const updatedAnalysis = data.choices?.[0]?.message?.content || analysisResult;
+      const updatedAnalysis = fnData.text || analysisResult;
       
       setAnalysisResult(updatedAnalysis);
       
