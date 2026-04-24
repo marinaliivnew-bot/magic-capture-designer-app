@@ -12,14 +12,30 @@ serve(async (req) => {
   }
 
   try {
-    const { systemPrompt, userPrompt } = await req.json();
+    const { systemPrompt, userPrompt: rawUserPrompt, imageUrls } = await req.json();
+    const MAX_USER_PROMPT_CHARS = 60_000;
+    const userPrompt = rawUserPrompt?.length > MAX_USER_PROMPT_CHARS
+      ? rawUserPrompt.slice(0, MAX_USER_PROMPT_CHARS) + "\n\n[...текст обрезан для соблюдения лимита контекста]"
+      : rawUserPrompt;
 
     const OPENAI_API_KEY = Deno.env.get("VITE_OPENAI_KEY") || Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) {
       return new Response(
         JSON.stringify({ error: "OPENAI_API_KEY is not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Build user message content — text + optional portfolio images for vision
+    type ContentPart =
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string; detail: "low" } };
+
+    const userContent: ContentPart[] = [{ type: "text", text: userPrompt }];
+    if (Array.isArray(imageUrls) && imageUrls.length > 0) {
+      for (const url of imageUrls.slice(0, 6)) {
+        userContent.push({ type: "image_url", image_url: { url, detail: "low" } });
+      }
     }
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -32,7 +48,7 @@ serve(async (req) => {
         model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+          { role: "user", content: userContent.length === 1 ? userContent[0].text : userContent },
         ],
         max_tokens: 1500,
         temperature: 0.7,
@@ -42,9 +58,10 @@ serve(async (req) => {
     if (!response.ok) {
       const errText = await response.text();
       console.error("OpenAI error:", response.status, errText);
+      // Return 200 so Supabase JS client doesn't swallow the body
       return new Response(
-        JSON.stringify({ error: `OpenAI API error: ${response.status}` }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: `OpenAI ${response.status}`, details: errText }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -56,9 +73,10 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("analyze-profile error:", e);
+    // Return 200 so the body is readable by the client
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

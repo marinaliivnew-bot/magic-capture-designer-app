@@ -377,27 +377,29 @@ const DesignerProfilePage = () => {
   // Extract questions from AI analysis text
   const extractQuestions = (text: string): string[] => {
     const questions: string[] = [];
-    const lines = text.split('\n');
-    let inQuestionsSection = false;
-    
+    const lowerText = text.toLowerCase();
+    const sectionIdx = lowerText.indexOf('хочу уточнить');
+    if (sectionIdx === -1) return questions;
+
+    const sectionText = text.slice(sectionIdx);
+    const lines = sectionText.split('\n').slice(1); // skip the header line
+
     for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.includes('ХОЧУ УТОЧНИТЬ') || trimmed.includes('3.')) {
-        inQuestionsSection = true;
-        continue;
-      }
-      if (inQuestionsSection && trimmed) {
-        // Look for question patterns (starting with number, dash, or just ending with ?)
-        if (trimmed.match(/^\d+\.|^-\s*|.*\?$/)) {
-          const question = trimmed.replace(/^\d+\.\s*/, '').replace(/^-\s*-?\s*/, '').trim();
-          if (question && question.length > 10) {
-            questions.push(question);
-          }
-        }
+      const trimmed = line.trim().replace(/\*\*/g, '');
+      if (!trimmed) continue;
+      // Stop at any new section header
+      if (trimmed.match(/^#+\s|\*\*[А-ЯA-Z]{4,}/)) break;
+      // Match numbered items, lines starting with dash/em-dash, or lines ending with ?
+      if (trimmed.match(/^\d+[.)]\s*|^[-—]\s+|.*\?$/)) {
+        const question = trimmed
+          .replace(/^\d+[.)]\s*/, '')
+          .replace(/^[-—]\s+/, '')
+          .trim();
+        if (question.length > 10) questions.push(question);
       }
     }
-    
-    return questions.slice(0, 3); // Max 3 questions
+
+    return questions.slice(0, 3);
   };
 
   // Analyze profile with OpenAI
@@ -448,14 +450,23 @@ const DesignerProfilePage = () => {
 Описание стиля: ${profile.style_description || "Не заполнено"}
 Визуальный язык (шкалы 1-10): ${Object.entries(profile.ergonomics_rules || {}).map(([k,v]) => `${k}: ${v}`).join(', ')}
 Стандарты и ограничения: ${profile.custom_ergonomics_text || "Не заполнено"}
-Ссылки на референсы: ${linkRefs.length > 0 ? linkRefs.join(", ") : "Нет"}
-Портфолио (файлы): ${uploadedFiles.map(f => f.name).join(", ") || "Нет"}${knowledgeBaseText}`;
+Ссылки на Pinterest/референсы: ${linkRefs.length > 0 ? linkRefs.join("\n") : "Нет"}
+Портфолио (изображений загружено): ${uploadedFiles.filter(f => !f.name.endsWith('.pdf')).length}${knowledgeBaseText}`;
+
+      // Image URLs for vision analysis (non-PDF portfolio files only, max 6)
+      const portfolioImageUrls = uploadedFiles
+        .filter(f => !f.name.endsWith('.pdf'))
+        .slice(0, 6)
+        .map(f => f.url);
 
       const { data: fnData, error: fnError } = await supabase.functions.invoke('analyze-profile', {
-        body: { systemPrompt, userPrompt },
+        body: { systemPrompt, userPrompt, imageUrls: portfolioImageUrls },
       });
 
-      if (fnError || !fnData?.text) throw new Error(fnError?.message || "Нет ответа от AI");
+      if (fnError || !fnData?.text) {
+        const detail = fnData?.details ? ` (${fnData.details.slice(0, 200)})` : "";
+        throw new Error(fnError?.message || fnData?.error || `Нет ответа от AI${detail}`);
+      }
 
       const analysisText = fnData.text || "Не удалось получить анализ";
       
@@ -504,7 +515,10 @@ const DesignerProfilePage = () => {
         body: { systemPrompt, userPrompt },
       });
 
-      if (fnError || !fnData?.text) throw new Error(fnError?.message || "Нет ответа от AI");
+      if (fnError || !fnData?.text) {
+        const detail = fnData?.details ? ` (${fnData.details.slice(0, 200)})` : "";
+        throw new Error(fnError?.message || fnData?.error || `Нет ответа от AI${detail}`);
+      }
 
       const updatedAnalysis = fnData.text || analysisResult;
       
