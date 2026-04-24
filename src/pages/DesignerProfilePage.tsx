@@ -57,6 +57,8 @@ const DesignerProfilePage = () => {
   const [aiQuestions, setAiQuestions] = useState<string[]>([]);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [updatingAnalysis, setUpdatingAnalysis] = useState(false);
+  // Saved Q&A pairs — set after designer submits answers
+  const [answeredQA, setAnsweredQA] = useState<{ q: string; a: string }[] | null>(null);
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [knowledgeFiles, setKnowledgeFiles] = useState<UploadedFile[]>([]);
@@ -143,7 +145,12 @@ const DesignerProfilePage = () => {
         if (data.ai_analysis) {
           setAnalysisResult(data.ai_analysis);
         }
-        if (data.ai_questions) {
+        // Restore answered Q&A if the designer already submitted answers
+        const savedQA = data.hard_constraints?._qa as { q: string; a: string }[] | undefined;
+        if (savedQA && savedQA.length > 0) {
+          setAnsweredQA(savedQA);
+          setAiQuestions([]); // answered — no input fields needed
+        } else if (data.ai_questions) {
           setAiQuestions(Array.isArray(data.ai_questions) ? data.ai_questions : []);
         }
         
@@ -411,6 +418,8 @@ const DesignerProfilePage = () => {
 
     setAnalyzing(true);
     setAnalysisResult(null);
+    setAnsweredQA(null); // clear old answered Q&A when running fresh analysis
+    setAnswers({});
 
     try {
       const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
@@ -476,13 +485,15 @@ const DesignerProfilePage = () => {
       const questions = extractQuestions(analysisText);
       setAiQuestions(questions);
       
-      // Save to database
+      // Save to database — clear old answered Q&A when new analysis is generated
+      const { _qa: _removed, ...otherConstraints } = profile.hard_constraints || {};
       await upsertDesignerProfile({
         ...profile,
+        hard_constraints: otherConstraints,
         ai_analysis: analysisText,
         ai_questions: questions,
       });
-      
+
       toast.success("Анализ сохранён");
     } catch (e) {
       toast.error("Ошибка анализа профиля");
@@ -521,15 +532,22 @@ const DesignerProfilePage = () => {
       }
 
       const updatedAnalysis = fnData.text || analysisResult;
-      
+
+      // Build answered Q&A pairs for persistent display
+      const qa = aiQuestions.map((q, i) => ({ q, a: answers[i] || "" }));
+      setAnsweredQA(qa);
+      setAiQuestions([]); // no more input fields — answers are saved
       setAnalysisResult(updatedAnalysis);
-      
-      // Save to database
+
+      // Save to database: store Q&A in hard_constraints._qa, clear ai_questions
+      const { _qa: _old, ...otherConstraints } = profile.hard_constraints || {};
       await upsertDesignerProfile({
         ...profile,
+        hard_constraints: { ...otherConstraints, _qa: qa },
         ai_analysis: updatedAnalysis,
+        ai_questions: [],
       });
-      
+
       toast.success("Анализ обновлён с учётом ваших ответов");
     } catch (e) {
       toast.error("Ошибка обновления анализа");
@@ -840,11 +858,29 @@ const DesignerProfilePage = () => {
                   </div>
                 </div>
 
-                {/* Section 3: Questions */}
+                {/* Section 3: Questions / Answered Q&A */}
                 <div className="bg-[#F8F6F3] border border-[#D4C8B8] rounded-xl p-6 shadow-sm">
                   <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Хочу уточнить</h3>
-                  
-                  {aiQuestions.length > 0 ? (
+
+                  {answeredQA && answeredQA.length > 0 ? (
+                    // Saved Q&A — show read-only, no inputs
+                    <div className="space-y-4">
+                      {answeredQA.map((item, idx) => (
+                        <div key={idx} className="space-y-1">
+                          <p className="text-[15px] text-[#2D2D2D] font-medium">
+                            {idx + 1}. {item.q.replace(/\*\*/g, '').trim()}
+                          </p>
+                          <p className="text-[14px] text-[#5C5C5C] bg-white rounded-lg px-3 py-2 border border-[#E5E5E5]">
+                            {item.a || <span className="italic text-muted-foreground">—</span>}
+                          </p>
+                        </div>
+                      ))}
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Ответы учтены в анализе. Нажмите «Проанализировать профиль» чтобы обновить вопросы.
+                      </p>
+                    </div>
+                  ) : aiQuestions.length > 0 ? (
+                    // Unanswered questions — show input fields
                     <div className="space-y-4">
                       {aiQuestions.map((question, idx) => (
                         <div key={idx} className="space-y-2">
@@ -859,8 +895,7 @@ const DesignerProfilePage = () => {
                           />
                         </div>
                       ))}
-                      
-                      <Button 
+                      <Button
                         onClick={updateAnalysisWithAnswers}
                         disabled={updatingAnalysis || Object.keys(answers).length === 0}
                         className="w-full mt-4"
@@ -873,11 +908,11 @@ const DesignerProfilePage = () => {
                       </Button>
                     </div>
                   ) : (
+                    // No questions extracted — show raw text from analysis
                     <div className="text-[15px] leading-relaxed text-[#2D2D2D] space-y-3">
                       {(() => {
-                        const section = analysisResult.split(/\d+\.\s*ХОЧУ УТОЧНИТЬ|ХОЧУ УТОЧНИТЬ/)[1] || '';
+                        const section = analysisResult.split(/\d+\.\s*ХОЧУ УТОЧНИТЬ|ХОЧУ УТОЧНИТЬ/i)[1] || '';
                         const cleanSection = section.replace(/\*\*/g, '').trim();
-                        // Try to extract numbered questions
                         const lines = cleanSection.split('\n').filter(line => line.trim());
                         return lines.map((line, i) => (
                           <p key={i} className="text-[15px] text-[#2D2D2D]">
