@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getProjects, getBrief } from "@/lib/api";
+import { getProjects, getBrief, getDesignerProfile } from "@/lib/api";
+import { getSessionId } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { Loader as Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,11 +10,27 @@ import { getProgressTextColor } from "@/components/ui/progress";
 const Index = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<any[]>([]);
+  const [hasDesignerProfile, setHasDesignerProfile] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadProjects = async () => {
     try {
-      const data = await getProjects();
+      const [data, profile] = await Promise.all([
+        getProjects(),
+        getDesignerProfile(getSessionId()),
+      ]);
+
+      setHasDesignerProfile(
+        Boolean(
+          profile &&
+            (
+              profile.style_description?.trim().length ||
+              profile.custom_ergonomics_text?.trim().length ||
+              (Array.isArray(profile.style_refs) && profile.style_refs.length > 0)
+            )
+        )
+      );
+
       if (!data || data.length === 0) {
         setProjects([]);
         return;
@@ -297,9 +314,16 @@ const Index = () => {
                     className="border border-[#D0C8C0] bg-white p-6 cursor-pointer hover:border-primary transition-colors duration-350"
                     onClick={() => navigate(`/project/${p.id}/edit`)}
                   >
-                    <h3 className="font-display text-[20px] text-[#1A1A1A] mb-2">
-                      {p.name}
-                    </h3>
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <h3 className="font-display text-[20px] text-[#1A1A1A]">
+                        {p.name}
+                      </h3>
+                      {hasDesignerProfile && (
+                        <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] font-medium uppercase tracking-[0.08em] text-primary">
+                          Стандарты применяются
+                        </span>
+                      )}
+                    </div>
                     <p className="font-body text-[13px] text-[#888888] mb-4">
                       {new Date(p.created_at).toLocaleDateString("ru-RU")}
                     </p>

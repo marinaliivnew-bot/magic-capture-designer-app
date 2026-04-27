@@ -105,6 +105,7 @@ export type Database = {
           success_criteria: string | null
           updated_at: string
           user_refs: Json | null
+          user_refs_structured: Json | null
           users_of_space: string | null
           zones: string | null
         }
@@ -122,6 +123,7 @@ export type Database = {
           success_criteria?: string | null
           updated_at?: string
           user_refs?: Json | null
+          user_refs_structured?: Json | null
           users_of_space?: string | null
           zones?: string | null
         }
@@ -139,6 +141,7 @@ export type Database = {
           success_criteria?: string | null
           updated_at?: string
           user_refs?: Json | null
+          user_refs_structured?: Json | null
           users_of_space?: string | null
           zones?: string | null
         }

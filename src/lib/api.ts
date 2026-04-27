@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "./session";
+import { buildStructuredUserRefs, serializeUserRefs, type UserRef } from "./user-refs";
 
 // Projects
 export async function createProject(data: {
@@ -95,12 +96,22 @@ const ALLOWED_BRIEF_FIELDS = [
   "success_criteria",
   "completeness_score",
   "user_refs",
+  "user_refs_structured",
   "style_narrowing_result",
+  "client_taste_result",
 ];
 
 export async function upsertBrief(projectId: string, fields: Record<string, any>) {
+  const normalizedFields = { ...fields };
+  if (Array.isArray(normalizedFields.user_refs)) {
+    normalizedFields.user_refs = serializeUserRefs(normalizedFields.user_refs as UserRef[]);
+  }
+  if (!normalizedFields.user_refs_structured && Array.isArray(normalizedFields.user_refs)) {
+    normalizedFields.user_refs_structured = buildStructuredUserRefs(normalizedFields.user_refs as UserRef[]);
+  }
+
   const filtered = Object.fromEntries(
-    Object.entries(fields).filter(([key]) => ALLOWED_BRIEF_FIELDS.includes(key))
+    Object.entries(normalizedFields).filter(([key]) => ALLOWED_BRIEF_FIELDS.includes(key))
   );
 
   // Check if brief exists
@@ -427,7 +438,7 @@ export async function getDesignerProfile(sessionId: string): Promise<DesignerPro
 export async function upsertDesignerProfile(profile: DesignerProfile): Promise<DesignerProfile> {
   // Exclude auto-generated fields from insert/update
   const { id, created_at, updated_at, ...profileData } = profile;
-  
+
   const { data, error } = await supabase
     .from("designer_profile")
     .upsert(profileData, { onConflict: "session_id" })
@@ -435,4 +446,62 @@ export async function upsertDesignerProfile(profile: DesignerProfile): Promise<D
     .single();
   if (error) throw error;
   return data;
+}
+
+// Client taste analysis
+export interface ClientTasteSignal {
+  signal: string;
+  strength: "strong" | "moderate" | "weak";
+  source: string;
+}
+
+export interface ClientTasteContradiction {
+  description: string;
+  element_a: string;
+  element_b: string;
+}
+
+export interface ClientTasteResult {
+  dominant_signals: ClientTasteSignal[];
+  rejected_elements: string[];
+  contradictions: ClientTasteContradiction[];
+  summary: string;
+}
+
+export async function analyzeClientTaste(projectId: string): Promise<ClientTasteResult> {
+  const [brief, designerProfile] = await Promise.all([
+    getBrief(projectId),
+    getDesignerProfile(getSessionId()),
+  ]);
+
+  const userRefsStructured = (brief as any)?.user_refs_structured || (brief as any)?.user_refs || [];
+  const designerProfileText = formatDesignerProfileForAI(designerProfile);
+
+  const briefFields = [
+    brief ? `Образ жизни: ${(brief as any).users_of_space || ""}` : "",
+    brief ? `Сценарии: ${(brief as any).scenarios || ""}` : "",
+    brief ? `Нравится (style_likes): ${(brief as any).style_likes || ""}` : "",
+    brief ? `Не нравится (style_dislikes): ${(brief as any).style_dislikes || ""}` : "",
+  ].filter(Boolean).join("\n");
+
+  const resp = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-client-taste`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ briefText: briefFields, userRefsStructured, designerProfileText }),
+    },
+  );
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || `analyze-client-taste failed: ${resp.status}`);
+  }
+
+  const result: ClientTasteResult = await resp.json();
+  await upsertBrief(projectId, { client_taste_result: result });
+  return result;
 }
