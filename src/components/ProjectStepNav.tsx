@@ -7,7 +7,7 @@ const STEPS = [
   { key: "style", label: "Стиль", path: (id: string) => `/project/${id}/style` },
   { key: "client-taste", label: "Вкус", path: (id: string) => `/project/${id}/client-taste` },
   { key: "questions", label: "Вопросы", path: (id: string) => `/project/${id}/questions` },
-  { key: "agreed-style", label: "Согласование", path: (id: string) => `/project/${id}/agreed-style` },
+  { key: "agreed-style", label: "Согласов.", path: (id: string) => `/project/${id}/agreed-style` },
   { key: "board", label: "Борд", path: (id: string) => `/project/${id}/board` },
   { key: "export", label: "Экспорт", path: (id: string) => `/project/${id}/export` },
 ];
@@ -22,20 +22,20 @@ const ProjectStepNav = ({ projectId, currentStep }: ProjectStepNavProps) => {
   const currentIndex = STEPS.findIndex((step) => step.key === currentStep);
 
   return (
-    <nav className="flex items-center gap-1 text-[11px] font-body font-medium uppercase tracking-[0.1em]">
+    <nav className="flex items-center gap-1 overflow-x-auto text-[11px] font-body font-medium uppercase tracking-[0.1em] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {STEPS.map((step, index) => {
         const isCurrent = step.key === currentStep;
         const isPast = index < currentIndex;
         const isFuture = index > currentIndex;
 
         return (
-          <span key={step.key} className="flex items-center gap-1">
+          <span key={step.key} className="flex shrink-0 items-center gap-1">
             {index > 0 && <span className="mx-0.5 text-muted-foreground">→</span>}
             <button
               onClick={() => (isPast ? navigate(step.path(projectId)) : undefined)}
               disabled={isFuture}
               className={cn(
-                "transition-colors duration-350",
+                "shrink-0 transition-colors duration-350",
                 isCurrent && "font-medium text-primary",
                 isPast && "cursor-pointer text-muted-foreground hover:text-foreground",
                 isFuture && "cursor-default text-muted-foreground/40",

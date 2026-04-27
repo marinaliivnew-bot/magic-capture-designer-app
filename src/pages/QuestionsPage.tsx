@@ -358,10 +358,10 @@ const QuestionsPage = () => {
             {reanalyzing ? "Анализирую…" : "Пере-анализ"}
           </Button>
           <Button
-            onClick={() => navigate(`/project/${projectId}/board`)}
+            onClick={() => navigate(`/project/${projectId}/agreed-style`)}
             className="flex-1"
           >
-            Концепт-борд
+            Согласование
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>

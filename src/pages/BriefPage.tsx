@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Download, FileText, Image as ImageIcon, LayoutGrid, Loader2, Palette, Save, Settings, Sparkles } from "lucide-react";
+import { Check, Download, FileText, Image as ImageIcon, Loader2, Palette, Save, Settings, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { analyzeBrief, getBoardBlocks, getBrief, getIssues, getProject, getQuestions, upsertBrief } from "@/lib/api";
 import { getRooms } from "@/lib/rooms";
@@ -389,17 +389,11 @@ const BriefPage = () => {
         </div>
 
         <div className="mt-16 border-t border-border pt-8">
-          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="label-style text-foreground">Следующий шаг</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                После сохранения brief-а система выделит противоречия и подготовит уточняющие вопросы.
-              </p>
-            </div>
-            <Button variant="outline" onClick={() => navigate(`/project/${projectId}/board`)}>
-              <LayoutGrid className="mr-2 h-4 w-4" />
-              Концепт-борд
-            </Button>
+          <div className="mb-6">
+            <h3 className="label-style text-foreground">Следующий шаг</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              После анализа система извлечёт вкус клиента, выделит противоречия с вашими стандартами и подготовит уточняющие вопросы.
+            </p>
           </div>
 
           <div className="flex flex-col gap-4 sm:flex-row">
