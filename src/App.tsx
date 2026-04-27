@@ -13,6 +13,7 @@ import StyleNarrowingPage from "./pages/StyleNarrowingPage";
 import ExportPage from "./pages/ExportPage";
 import DesignerProfilePage from "./pages/DesignerProfilePage";
 import ClientTastePage from "./pages/ClientTastePage";
+import AgreedStylePage from "./pages/AgreedStylePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
           <Route path="/project/:projectId/style" element={<StyleNarrowingPage />} />
           <Route path="/project/:projectId/client-taste" element={<ClientTastePage />} />
           <Route path="/project/:projectId/questions" element={<QuestionsPage />} />
+          <Route path="/project/:projectId/agreed-style" element={<AgreedStylePage />} />
           <Route path="/project/:projectId/board" element={<ConceptBoard />} />
           <Route path="/project/:projectId/export" element={<ExportPage />} />
           <Route path="*" element={<NotFound />} />

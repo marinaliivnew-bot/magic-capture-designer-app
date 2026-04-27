@@ -99,6 +99,7 @@ const ALLOWED_BRIEF_FIELDS = [
   "user_refs_structured",
   "style_narrowing_result",
   "client_taste_result",
+  "agreed_style_result",
 ];
 
 export async function upsertBrief(projectId: string, fields: Record<string, any>) {
@@ -503,5 +504,62 @@ export async function analyzeClientTaste(projectId: string): Promise<ClientTaste
 
   const result: ClientTasteResult = await resp.json();
   await upsertBrief(projectId, { client_taste_result: result });
+  return result;
+}
+
+// Style resolution (3-layer: client taste + designer standards + constraints)
+export interface AgreedElement {
+  element: string;
+  client_signal: string;
+  designer_note: string;
+  layer: "client" | "designer" | "both";
+}
+
+export interface StyleConflict {
+  element: string;
+  client_want: string;
+  standard_violated: string;
+  severity: "hard" | "soft";
+  alternatives: string[];
+  resolution?: "accepted" | "overridden" | null;
+  resolution_note?: string;
+}
+
+export interface AgreedStyleResult {
+  agreed_elements: AgreedElement[];
+  conflicts: StyleConflict[];
+  gaps: string[];
+  summary: string;
+}
+
+export async function resolveStyle(projectId: string): Promise<AgreedStyleResult> {
+  const [brief, designerProfile] = await Promise.all([
+    getBrief(projectId),
+    getDesignerProfile(getSessionId()),
+  ]);
+
+  const clientTasteResult = (brief as any)?.client_taste_result ?? null;
+  const styleNarrowingResult = (brief as any)?.style_narrowing_result ?? null;
+  const designerProfileText = formatDesignerProfileForAI(designerProfile);
+
+  const resp = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/resolve-style`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ clientTasteResult, designerProfileText, styleNarrowingResult }),
+    },
+  );
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || `resolve-style failed: ${resp.status}`);
+  }
+
+  const result: AgreedStyleResult = await resp.json();
+  await upsertBrief(projectId, { agreed_style_result: result });
   return result;
 }

@@ -7,6 +7,7 @@ const STEPS = [
   { key: "style", label: "Стиль", path: (id: string) => `/project/${id}/style` },
   { key: "client-taste", label: "Вкус", path: (id: string) => `/project/${id}/client-taste` },
   { key: "questions", label: "Вопросы", path: (id: string) => `/project/${id}/questions` },
+  { key: "agreed-style", label: "Согласование", path: (id: string) => `/project/${id}/agreed-style` },
   { key: "board", label: "Борд", path: (id: string) => `/project/${id}/board` },
   { key: "export", label: "Экспорт", path: (id: string) => `/project/${id}/export` },
 ];
