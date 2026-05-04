@@ -327,6 +327,8 @@ export async function generateBoard(projectId: string, briefText: string, projec
     getDesignerProfile(getSessionId()),
   ]);
   const userRefs = (brief as any)?.user_refs || [];
+  const userRefsStructured = (brief as any)?.user_refs_structured || [];
+  const clientTasteResult = (brief as any)?.client_taste_result ?? null;
   const designerProfileText = formatDesignerProfileForAI(designerProfile);
 
   const resp = await fetch(
@@ -337,7 +339,7 @@ export async function generateBoard(projectId: string, briefText: string, projec
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify({ briefText, projectContext, userRefs, designerProfileText }),
+      body: JSON.stringify({ briefText, projectContext, userRefs, designerProfileText, userRefsStructured, clientTasteResult }),
     }
   );
   if (!resp.ok) {
