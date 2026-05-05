@@ -1,0 +1,2 @@
+ALTER TABLE public.briefs ADD COLUMN IF NOT EXISTS budget TEXT;
+ALTER TABLE public.briefs ADD COLUMN IF NOT EXISTS timeline TEXT;

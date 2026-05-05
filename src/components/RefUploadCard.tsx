@@ -31,57 +31,68 @@ const RefUploadCard = ({
 
   return (
     <>
-      {stepRefs.map((ref) => (
-        <div key={ref.url} className="group relative flex flex-col overflow-hidden border border-primary">
-          <div className="relative aspect-[4/3] w-full overflow-hidden bg-border">
-            <img src={ref.url} alt="Референс клиента" className="h-full w-full object-cover" />
-            <button
-              type="button"
-              onClick={() => onRemove(refs.indexOf(ref))}
-              className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center bg-foreground/70 text-background transition-colors hover:bg-foreground"
-            >
-              <X className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
+      {stepRefs.map((ref, stepIndex) => {
+        const globalIndex = refs.indexOf(ref);
+        const hasAnnotation = !!(ref.likes?.trim() || ref.dislikes?.trim() || ref.tags?.length);
+
+        return (
+          <div key={ref.url} className="group relative flex flex-col overflow-hidden border border-primary">
+            <div className="relative aspect-[4/3] w-full overflow-hidden bg-border">
+              <img src={ref.url} alt={`Референс ${stepIndex + 1}`} className="h-full w-full object-cover" />
+              <button
+                type="button"
+                onClick={() => onRemove(globalIndex)}
+                className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center bg-foreground/70 text-background transition-colors hover:bg-foreground"
+              >
+                <X className="h-3.5 w-3.5" strokeWidth={2} />
+              </button>
+              {showAnnotations && (
+                <div className={cn(
+                  "absolute bottom-2 left-2 h-2 w-2 rounded-full",
+                  hasAnnotation ? "bg-primary" : "bg-muted-foreground/50",
+                )} title={hasAnnotation ? "Аннотация заполнена" : "Аннотация не заполнена"} />
+              )}
+            </div>
+
+            <div className="space-y-3 px-3 py-3 text-left">
+              <p className="label-style text-foreground">Референс {stepIndex + 1}</p>
+
+              {showAnnotations && onUpdate && (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Что именно нравится</p>
+                    <Textarea
+                      value={ref.likes || ""}
+                      onChange={(event) => onUpdate(globalIndex, { ...ref, likes: event.target.value })}
+                      className="min-h-[84px]"
+                      placeholder="Например: мягкий свет, цельный объём кухни, спокойная палитра"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Что не брать</p>
+                    <Textarea
+                      value={ref.dislikes || ""}
+                      onChange={(event) => onUpdate(globalIndex, { ...ref, dislikes: event.target.value })}
+                      className="min-h-[72px]"
+                      placeholder="Например: глянец, холодный серый, слишком много декора"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Теги</p>
+                    <Input
+                      value={formatTagsInput(ref.tags)}
+                      onChange={(event) => onUpdate(globalIndex, { ...ref, tags: parseTagsInput(event.target.value) })}
+                      placeholder="дерево, теплый свет, арки"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-
-          <div className="space-y-3 px-3 py-3 text-left">
-            <p className="label-style text-foreground">Референс клиента</p>
-
-            {showAnnotations && onUpdate && (
-              <>
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Что нравится</p>
-                  <Textarea
-                    value={ref.likes || ""}
-                    onChange={(event) => onUpdate(refs.indexOf(ref), { ...ref, likes: event.target.value })}
-                    className="min-h-[84px]"
-                    placeholder="Например: мягкий свет, цельный объём кухни, спокойная палитра"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Что не брать</p>
-                  <Textarea
-                    value={ref.dislikes || ""}
-                    onChange={(event) => onUpdate(refs.indexOf(ref), { ...ref, dislikes: event.target.value })}
-                    className="min-h-[72px]"
-                    placeholder="Например: глянец, холодный серый, слишком много декора"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Теги</p>
-                  <Input
-                    value={formatTagsInput(ref.tags)}
-                    onChange={(event) => onUpdate(refs.indexOf(ref), { ...ref, tags: parseTagsInput(event.target.value) })}
-                    placeholder="дерево, теплый свет, арки"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      ))}
+        );
+      })}
 
       {canAdd && (
         <button

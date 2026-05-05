@@ -30,6 +30,12 @@ const BRIEF_GROUPS = [
     fields: ["style_likes", "style_dislikes"],
   },
   {
+    key: "budget",
+    title: "Бюджет и сроки",
+    description: "Фиксируем финансовые рамки и временные ограничения. ИИ использует бюджет при подборе материалов и мебели.",
+    fields: ["budget", "timeline"],
+  },
+  {
     key: "constraints",
     title: "Ограничения и критерии",
     description: "Оставляем только реальные рамки, ограничения и критерии, по которым потом будет понятно, что решение сработало.",
@@ -347,7 +353,7 @@ const BriefPage = () => {
                       </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <RefUploadCard
                         refs={userRefs}
                         step="all"

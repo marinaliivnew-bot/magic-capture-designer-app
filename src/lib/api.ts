@@ -92,6 +92,8 @@ const ALLOWED_BRIEF_FIELDS = [
   "storage",
   "style_likes",
   "style_dislikes",
+  "budget",
+  "timeline",
   "constraints_practical",
   "success_criteria",
   "completeness_score",

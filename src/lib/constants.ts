@@ -14,7 +14,9 @@ export const BRIEF_SECTIONS = [
   { key: 'storage', label: 'Хранение', description: 'Потребности в хранении' },
   { key: 'style_likes', label: 'Стиль — нравится', description: 'Стилистические предпочтения' },
   { key: 'style_dislikes', label: 'Стиль — не нравится', description: 'Что точно не подходит' },
-  { key: 'constraints_practical', label: 'Ограничения', description: 'Бюджет, сроки, табу, уход, износостойкость' },
+  { key: 'budget', label: 'Бюджет', description: 'Общий бюджет или диапазон — на материалы, мебель, отделку' },
+  { key: 'timeline', label: 'Сроки', description: 'Дата окончания или этапы сдачи' },
+  { key: 'constraints_practical', label: 'Ограничения', description: 'Табу, требования к уходу, износостойкости, технические ограничения' },
   { key: 'success_criteria', label: 'Критерии успеха', description: 'Что будет "классно получилось"' },
 ] as const;
 
