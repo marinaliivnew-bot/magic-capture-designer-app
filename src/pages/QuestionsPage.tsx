@@ -263,7 +263,7 @@ const QuestionsPage = () => {
                 onClick={handleReanalyze}
                 disabled={reanalyzing}
               >
-                Запустить AI-анализ
+                Выявить противоречия
               </Button>
             </div>
           ) : (
@@ -285,7 +285,7 @@ const QuestionsPage = () => {
                       </div>
                       {q.unlocks && (
                         <p className="caption-style">
-                          Разблокирует: {q.unlocks}
+                          Разблокирует этап: {q.unlocks}
                         </p>
                       )}
                       {q.asked && (
@@ -355,7 +355,7 @@ const QuestionsPage = () => {
             ) : (
               <RotateCcw className="mr-2 h-4 w-4" />
             )}
-            {reanalyzing ? "Анализирую…" : "Пере-анализ"}
+            {reanalyzing ? "Анализирую…" : "Выявить противоречия"}
           </Button>
           <Button
             onClick={() => navigate(`/project/${projectId}/agreed-style`)}

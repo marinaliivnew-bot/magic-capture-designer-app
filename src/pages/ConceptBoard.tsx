@@ -5,6 +5,7 @@ import { getRooms } from "@/lib/rooms";
 import { BOARD_BLOCK_TYPES, BRIEF_SECTIONS, ROOM_TYPES } from "@/lib/constants";
 import { generateFullPDF } from "@/lib/pdf-export";
 import ProjectHeader from "@/components/ProjectHeader";
+import ColorChip from "@/components/ColorChip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -220,62 +221,81 @@ const ConceptBoard = () => {
                   {getBlockLabel(block.block_type)}
                 </h3>
 
-                {/* Images */}
-                <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {block.board_images?.map((img: any) => (
-                    <div key={img.id} className="group relative">
-                      {img.url ? (
-                        <img
-                          src={img.url}
-                          alt={block.caption || ""}
-                          className="aspect-[4/3] w-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="flex aspect-[4/3] w-full items-center justify-center bg-border">
-                          <ImageIcon className="h-8 w-8 text-muted-foreground" strokeWidth={1} />
+                {/* Palette block: color chips grid */}
+                {block.block_type === "palette" && Array.isArray(block.color_chips) && block.color_chips.length > 0 ? (
+                  <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+                    {block.color_chips.map((chip: any, i: number) => (
+                      <ColorChip
+                        key={i}
+                        hex={chip.hex}
+                        name={chip.name}
+                        role={chip.role}
+                        ral={chip.ral}
+                      />
+                    ))}
+                  </div>
+                ) : block.block_type === "palette" ? (
+                  <p className="mb-6 text-sm text-muted-foreground italic">
+                    Цветовые чипы появятся после генерации борда
+                  </p>
+                ) : (
+                  /* Other blocks: photo grid */
+                  <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {block.board_images?.map((img: any) => (
+                      <div key={img.id} className="group relative">
+                        {img.url ? (
+                          <img
+                            src={img.url}
+                            alt={block.caption || ""}
+                            className="aspect-[4/3] w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex aspect-[4/3] w-full items-center justify-center bg-border">
+                            <ImageIcon className="h-8 w-8 text-muted-foreground" strokeWidth={1} />
+                          </div>
+                        )}
+
+                        {img.note && (
+                          <span className="absolute bottom-2 left-2 max-w-[80%] truncate bg-foreground/70 px-2 py-0.5 text-[10px] font-medium text-background">
+                            {img.note}
+                          </span>
+                        )}
+
+                        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity duration-350 group-hover:opacity-100">
+                          <button
+                            className="flex h-7 w-7 items-center justify-center bg-card/90 border border-border text-foreground hover:text-primary transition-colors"
+                            onClick={() =>
+                              setEditingImageUrl(editingImageUrl === img.id ? null : img.id)
+                            }
+                          >
+                            <Pencil className="h-3 w-3" strokeWidth={1.5} />
+                          </button>
+                          {img.source_url && (
+                            <a href={img.source_url} target="_blank" rel="noopener noreferrer">
+                              <span className="flex h-7 w-7 items-center justify-center bg-card/90 border border-border text-foreground hover:text-primary transition-colors">
+                                <ExternalLink className="h-3 w-3" strokeWidth={1.5} />
+                              </span>
+                            </a>
+                          )}
                         </div>
-                      )}
 
-                      {img.note && (
-                        <span className="absolute bottom-2 left-2 max-w-[80%] truncate bg-foreground/70 px-2 py-0.5 text-[10px] font-medium text-background">
-                          {img.note}
-                        </span>
-                      )}
-
-                      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity duration-350 group-hover:opacity-100">
-                        <button
-                          className="flex h-7 w-7 items-center justify-center bg-card/90 border border-border text-foreground hover:text-primary transition-colors"
-                          onClick={() =>
-                            setEditingImageUrl(editingImageUrl === img.id ? null : img.id)
-                          }
-                        >
-                          <Pencil className="h-3 w-3" strokeWidth={1.5} />
-                        </button>
-                        {img.source_url && (
-                          <a href={img.source_url} target="_blank" rel="noopener noreferrer">
-                            <span className="flex h-7 w-7 items-center justify-center bg-card/90 border border-border text-foreground hover:text-primary transition-colors">
-                              <ExternalLink className="h-3 w-3" strokeWidth={1.5} />
-                            </span>
-                          </a>
+                        {editingImageUrl === img.id && (
+                          <div className="mt-2">
+                            <Input
+                              placeholder="URL изображения"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  handleReplaceImage(img.id, (e.target as HTMLInputElement).value);
+                                }
+                              }}
+                            />
+                          </div>
                         )}
                       </div>
-
-                      {editingImageUrl === img.id && (
-                        <div className="mt-2">
-                          <Input
-                            placeholder="URL изображения"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                handleReplaceImage(img.id, (e.target as HTMLInputElement).value);
-                              }
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Caption */}
                 {editingCaption === block.id ? (
@@ -312,7 +332,7 @@ const ConceptBoard = () => {
             className="flex-1"
           >
             <FileDown className="mr-2 h-4 w-4" />
-            Экспорт PDF
+            Экспорт приложения к договору
           </Button>
         </div>
       </div>

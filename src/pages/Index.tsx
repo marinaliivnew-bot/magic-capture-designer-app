@@ -95,7 +95,7 @@ const Index = () => {
                 onClick={() => navigate("/new")}
                 className="px-10 py-[14px] h-auto"
               >
-                + Новый проект
+                + Загрузить исходники
               </Button>
             </div>
 
@@ -359,7 +359,7 @@ const Index = () => {
             onClick={() => navigate("/new")}
             className="px-10 py-[14px] h-auto"
           >
-            + Новый проект
+            + Загрузить исходники
           </Button>
         </div>
       </section>

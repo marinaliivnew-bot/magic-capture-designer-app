@@ -211,6 +211,8 @@ export async function saveBoardBlocks(projectId: string, blocks: Array<{
   block_type: string;
   caption?: string;
   sort_order: number;
+  color_chips?: any[];
+  lighting_zones?: any[];
   images?: Array<{
     url?: string;
     source_type?: string;
@@ -387,6 +389,8 @@ export async function generateBoard(projectId: string, briefText: string, projec
     block_type: b.block_type,
     caption: b.caption,
     sort_order: i,
+    color_chips: b.color_chips || [],
+    lighting_zones: b.lighting_zones || [],
     images: (Array.isArray(b.search_queries) ? b.search_queries : []).map((q: string, j: number) => {
       const key = `board_${i}_${j}`;
       const img = imageMap[key];

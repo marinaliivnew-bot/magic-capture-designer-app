@@ -1,4 +1,31 @@
-# Magic Capture - Designer Brief Tool
+This block captures how the space must function.
+
+- who will live / use the space
+- lifestyle scenarios
+- special routines or household patterns
+- what must happen in the space
+
+Examples:
+- children# Magic Capture - Designer Brief Tool
+
+## Current Focus (update after each session)
+
+### Active problems
+- generate-board prompt ignores: room dimensions, budget, Q&A answers, 
+  reference annotations, building type (log house). Captions generic, 
+  no designer reasoning
+- Style Narrowing regression: duplicate images across style/color/dislike 
+  steps, single-item photos instead of room interiors
+- Art Deco card still not loading
+- BriefPage still shows Style Narrowing buttons (should be removed per roadmap)
+- One client reference shows grey placeholder (broken URL or storage issue)
+
+### Last session
+- 2026-05-04: Full test of "моя баня" project. Identified issues in 
+  brief PDF, concept PDF, style narrowing, agreed style page.
+
+### Next task
+- Rewrite generate-board system prompt to use full project context
 
 ## Product Overview
 
@@ -247,15 +274,7 @@ It should support three parallel sources for the same spatial information:
 
 ### Section 3 - Client and lifestyle
 
-This block captures how the space must function.
 
-- who will live / use the space
-- lifestyle scenarios
-- special routines or household patterns
-- what must happen in the space
-
-Examples:
-- children
 - pets
 - guests
 - work from home

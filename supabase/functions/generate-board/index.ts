@@ -30,10 +30,12 @@ ATMOSPHERE (атмосфера):
 
 PALETTE (палитра):
 - caption: 1 предложение — как цвета распределяются по помещениям
-- search_queries: 1 запрос для референсного интерьерного фото
-- color_chips: массив из 5-6 объектов: 
-  { "hex": "#F5ECD7", "name": "сливочный", "role": "стены" }
+- search_queries: пустой массив [] (изображения не нужны — только чипы)
+- image_comments: пустой массив []
+- color_chips: массив из 5-6 объектов:
+  { "hex": "#F5ECD7", "name": "сливочный", "role": "стены", "ral": "RAL 1013" }
   Роли: стены / пол / акцент / текстиль / детали
+  RAL — ближайший код RAL Classic. Если не уверен — оставь пустую строку, фронт вычислит сам.
 - lighting_zones: пустой массив []
 
 MATERIALS (материалы):
@@ -187,8 +189,9 @@ ${briefText}`;
                               hex: { type: "string" },
                               name: { type: "string" },
                               role: { type: "string" },
+                              ral: { type: "string" },
                             },
-                            required: ["hex", "name", "role"],
+                            required: ["hex", "name", "role", "ral"],
                             additionalProperties: false,
                           },
                         },

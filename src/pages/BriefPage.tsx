@@ -334,7 +334,7 @@ const BriefPage = () => {
                       </div>
                       <Button variant={styleFieldsFilled ? "outline" : "default"} onClick={() => navigate(`/project/${projectId}/style`)}>
                         <Palette className="mr-2 h-4 w-4" />
-                        Пройти Style Narrowing
+                        Синхронизировать вкус
                       </Button>
                     </div>
 

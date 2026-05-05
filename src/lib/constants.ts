@@ -19,15 +19,15 @@ export const BRIEF_SECTIONS = [
 ] as const;
 
 export const BOARD_BLOCK_TYPES = [
-  { type: 'atmosphere', label: 'Атмосфера / Вайб' },
-  { type: 'palette', label: 'Цветовая палитра' },
-  { type: 'materials', label: 'Материалы и текстуры' },
-  { type: 'furniture', label: 'Мебель / формы' },
+  { type: 'atmosphere', label: 'Визуальная атмосфера и эмоция' },
+  { type: 'palette', label: 'Палитра стандартов RAL / NCS' },
+  { type: 'materials', label: 'Карта материалов и текстур' },
+  { type: 'furniture', label: 'Габариты мебели и эргономика' },
   { type: 'lighting', label: 'Освещение' },
 ] as const;
 
 export const PRIORITY_CONFIG = {
-  critical: { label: 'Критично', color: 'destructive' as const },
-  important: { label: 'Важно', color: 'warning' as const },
-  optional: { label: 'Опционально', color: 'info' as const },
+  critical: { label: 'Критично: Влияет на планировку', color: 'destructive' as const },
+  important: { label: 'Важно: Влияет на бюджет', color: 'warning' as const },
+  optional: { label: 'Опционально: Детализация', color: 'info' as const },
 } as const;
