@@ -69,10 +69,34 @@ LIGHTING (освещение):
 "В парной используется дерево согласно пожеланиям"
 
 Примеры ХОРОШИХ caption:
-"Для парной 5,79м² — вертикальная термоосина: светлее ели, 
+"Для парной 5,79м² — вертикальная термоосина: светлее ели,
 не темнеет и не выделяет смолу при нагреве"
-"Диван ставим под углом 45° к входу — визуально зонирует кухню 
+"Диван ставим под углом 45° к входу — визуально зонирует кухню
 и гостиную в 12м² без перегородки"
+
+ПРАВИЛА ИСПОЛЬЗОВАНИЯ КОНТЕКСТА:
+1. Если в "РАЗМЕРЫ ПОМЕЩЕНИЙ" указаны конкретные комнаты и размеры — привязывай решения в caption к конкретным комнатам: "Для кухни-гостиной 3.3×3.7м подойдёт..."
+2. Если в "Описание" указан тип здания (бревенчатый дом, кирпичный и т.д.) — ОБЯЗАТЕЛЬНО включай тип здания в search_queries на английском (log cabin, brick house и т.д.)
+3. Если в "АННОТАЦИИ РЕФЕРЕНСОВ" есть теги и комментарии — используй их как подсказки для визуального направления, упоминай в caption
+4. Если в "АНАЛИЗ ВКУСА КЛИЕНТА" есть rejected_elements — НИКОГДА не включай их в search_queries
+5. Если есть бюджет — упоминай ценовой сегмент решений (эконом / средний / премиум)
+6. search_queries всегда на английском и всегда описывают ПОЛНЫЙ ИНТЕРЬЕР КОМНАТЫ, а не отдельный предмет
+
+ПЛОХОЙ search_query: "compact linen sofa durable fabric"
+ХОРОШИЙ search_query: "log cabin living room compact sofa warm lighting natural wood"
+
+ДИЗАЙНЕРСКИЕ КОММЕНТАРИИ К ИЗОБРАЖЕНИЯМ (image_comments):
+Для каждого search_query нужен параллельный комментарий в image_comments — профессиональный текст,
+который увидит клиент под изображением. Массивы должны быть одинаковой длины.
+
+Структура каждого комментария: ЧТО это → ЗАЧЕМ здесь → ТЕХНИЧЕСКИЙ параметр.
+Максимум 2 коротких предложения. Только факты, никакой воды.
+
+ПЛОХОЙ image_comment: "Уютный диван в скандинавском стиле"
+ХОРОШИЙ image_comment: "Двухместный диван на ножках из массива дуба — визуально разгружает пространство кухни-гостиной 12м². Льняная обивка, сегмент средний, съёмные чехлы."
+
+ПЛОХОЙ image_comment: "Красивая атмосфера вечернего освещения"
+ХОРОШИЙ image_comment: "Торшер с диффузором направляет свет в потолок — создаёт равномерный отражённый свет без теней. 2700К, уровень яркости 300–400 лм."
 
 Отвечай ТОЛЬКО вызовом функции generate_board_result.`;
 
@@ -82,7 +106,7 @@ serve(async (req) => {
   }
 
   try {
-    const { briefText, projectContext, userRefs, designerProfileText } = await req.json();
+    const { briefText, projectContext, userRefs, designerProfileText, userRefsStructured, clientTasteResult } = await req.json();
 
     // Supabase Edge Functions не знают `import.meta.env`, поэтому берем ключ из env.
     // Ожидаем имя переменной как в Vite-конфигах: VITE_OPENAI_KEY (с fallback).
@@ -98,15 +122,23 @@ serve(async (req) => {
       ? `\n\n## Пользовательские референсы\nПользователь загрузил свои референсы. Учитывай их стилистику при генерации концепт-борда.\n${userRefs.map((r: { url: string; step?: string }) => `- [${r.step || "ref"}] ${r.url}`).join("\n")}`
       : "";
 
+    const annotationsBlock = `\n\n## АННОТАЦИИ РЕФЕРЕНСОВ КЛИЕНТА\n${
+      Array.isArray(userRefsStructured) && userRefsStructured.length > 0
+        ? userRefsStructured.map((r: { summary?: string }) => r.summary).filter(Boolean).join("\n")
+        : "Нет аннотаций"
+    }`;
+
+    const tasteBlock = `\n\n## АНАЛИЗ ВКУСА КЛИЕНТА\n${clientTasteResult?.summary || "Анализ не проводился"}\nДоминирующие сигналы: ${clientTasteResult?.dominant_signals?.map((s: { signal: string }) => s.signal).join(", ") || "—"}\nОтвергнутые элементы: ${clientTasteResult?.rejected_elements?.join(", ") || "—"}`;
+
     const designerBlock = designerProfileText
       ? `## СТАНДАРТЫ ДИЗАЙНЕРА (наивысший приоритет)\n${designerProfileText}\n\n`
       : "";
 
     const userPrompt = `${designerBlock}## Контекст проекта
-${projectContext || "Не указан"}
+${projectContext || "Не указан"}${refsBlock}${annotationsBlock}${tasteBlock}
 
 ## Бриф
-${briefText}${refsBlock}`;
+${briefText}`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -143,6 +175,10 @@ ${briefText}${refsBlock}`;
                           type: "array",
                           items: { type: "string" },
                         },
+                        image_comments: {
+                          type: "array",
+                          items: { type: "string" },
+                        },
                         color_chips: {
                           type: "array",
                           items: {
@@ -171,7 +207,7 @@ ${briefText}${refsBlock}`;
                           },
                         },
                       },
-                      required: ["block_type", "caption", "search_queries", "color_chips", "lighting_zones"],
+                      required: ["block_type", "caption", "search_queries", "image_comments", "color_chips", "lighting_zones"],
                       additionalProperties: false,
                     },
                   },

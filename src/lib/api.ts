@@ -394,7 +394,7 @@ export async function generateBoard(projectId: string, briefText: string, projec
         url: img?.url || "",
         source_type: "unsplash_auto",
         attribution: img?.attribution || "",
-        note: q,
+        note: b.image_comments?.[j] || "",
       };
     }),
   }));
