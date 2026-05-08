@@ -61,7 +61,6 @@ export function generateFullPDF(data: PdfData, options: PdfOptions = {}) {
   const date = formatDate();
   const fileDate = formatFilenameDate();
   const projectName = project?.name || "Проект";
-  const constraints = (project?.constraints as Record<string, string>) || {};
 
   const docTitle = variant === "brief"
     ? `${projectName}_бриф_${fileDate}`
@@ -77,14 +76,12 @@ export function generateFullPDF(data: PdfData, options: PdfOptions = {}) {
 
   // ── Данные проекта ─────────────────────────────────────────────────────────
   const projectParts: string[] = [];
-  if (constraints.budget)
-    projectParts.push(`<div class="info-row"><span class="info-label">Бюджет и ограничения</span><span>${constraints.budget}</span></div>`);
-  if (constraints.timeline)
-    projectParts.push(`<div class="info-row"><span class="info-label">Сроки</span><span>${constraints.timeline}</span></div>`);
-  if (constraints.taboos)
-    projectParts.push(`<div class="info-row"><span class="info-label">Табу</span><span>${constraints.taboos}</span></div>`);
-  if (constraints.must_haves)
-    projectParts.push(`<div class="info-row"><span class="info-label">Must-have</span><span>${constraints.must_haves}</span></div>`);
+  if (brief?.budget)
+    projectParts.push(`<div class="info-row"><span class="info-label">Бюджет</span><span>${brief.budget}</span></div>`);
+  if (brief?.timeline)
+    projectParts.push(`<div class="info-row"><span class="info-label">Сроки</span><span>${brief.timeline}</span></div>`);
+  if (brief?.constraints_practical)
+    projectParts.push(`<div class="info-row"><span class="info-label">Ограничения и табу</span><span>${brief.constraints_practical}</span></div>`);
   if (project?.raw_input)
     projectParts.push(`<div class="info-row"><span class="info-label">Заметки</span><span>${project.raw_input}</span></div>`);
 
@@ -103,7 +100,8 @@ export function generateFullPDF(data: PdfData, options: PdfOptions = {}) {
     : "";
 
   // ── Бриф ──────────────────────────────────────────────────────────────────
-  const briefSections = BRIEF_SECTIONS.filter((s) => s.key !== "success_criteria");
+  const DETAIL_KEYS = ["success_criteria", "budget", "timeline", "constraints_practical"];
+  const briefSections = BRIEF_SECTIONS.filter((s) => !DETAIL_KEYS.includes(s.key));
   const briefHtml = `<h2>Бриф</h2>` + briefSections
     .map(
       ({ key, label }) =>

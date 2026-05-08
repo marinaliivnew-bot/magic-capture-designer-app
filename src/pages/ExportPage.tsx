@@ -71,8 +71,6 @@ const ExportPage = () => {
   const getBlockLabel = (type: string) =>
     BOARD_BLOCK_TYPES.find((b) => b.type === type)?.label || type;
 
-  const constraints = (project?.constraints as Record<string, string>) || {};
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -81,7 +79,8 @@ const ExportPage = () => {
     );
   }
 
-  const mainBriefSections = BRIEF_SECTIONS.filter((s) => s.key !== "success_criteria");
+  const DETAIL_KEYS = new Set(["success_criteria", "budget", "timeline", "constraints_practical"]);
+  const mainBriefSections = BRIEF_SECTIONS.filter((s) => !DETAIL_KEYS.has(s.key));
 
   return (
     <div className="min-h-screen bg-background">
@@ -124,33 +123,27 @@ const ExportPage = () => {
           </section>
         )}
 
-        {/* Данные проекта: бюджет / сроки / табу */}
-        {(constraints.budget || constraints.timeline || constraints.taboos || constraints.must_haves) && (
+        {/* Данные проекта: бюджет / сроки / ограничения */}
+        {(brief?.budget || brief?.timeline || brief?.constraints_practical) && (
           <section>
             <h2 className="mb-6 text-foreground">Данные проекта</h2>
             <div className="divide-y divide-border">
-              {constraints.budget && (
+              {brief?.budget && (
                 <div className="py-4">
-                  <span className="label-style text-foreground">Бюджет и ограничения</span>
-                  <p className="mt-1 text-[15px] font-light text-muted-foreground">{constraints.budget}</p>
+                  <span className="label-style text-foreground">Бюджет</span>
+                  <p className="mt-1 text-[15px] font-light text-muted-foreground">{brief.budget}</p>
                 </div>
               )}
-              {constraints.timeline && (
+              {brief?.timeline && (
                 <div className="py-4">
                   <span className="label-style text-foreground">Сроки</span>
-                  <p className="mt-1 text-[15px] font-light text-muted-foreground">{constraints.timeline}</p>
+                  <p className="mt-1 text-[15px] font-light text-muted-foreground">{brief.timeline}</p>
                 </div>
               )}
-              {constraints.taboos && (
+              {brief?.constraints_practical && (
                 <div className="py-4">
-                  <span className="label-style text-foreground">Табу</span>
-                  <p className="mt-1 text-[15px] font-light text-muted-foreground">{constraints.taboos}</p>
-                </div>
-              )}
-              {constraints.must_haves && (
-                <div className="py-4">
-                  <span className="label-style text-foreground">Must-have</span>
-                  <p className="mt-1 text-[15px] font-light text-muted-foreground">{constraints.must_haves}</p>
+                  <span className="label-style text-foreground">Ограничения и табу</span>
+                  <p className="mt-1 text-[15px] font-light text-muted-foreground">{brief.constraints_practical}</p>
                 </div>
               )}
             </div>

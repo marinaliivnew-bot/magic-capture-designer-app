@@ -1,11 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Download, FileText, Image as ImageIcon, Loader2, Palette, Save, Settings, Sparkles } from "lucide-react";
+import { Check, Download, FileText, Image as ImageIcon, Loader2, Palette, Ruler, Save, Settings, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { analyzeBrief, getBoardBlocks, getBrief, getIssues, getProject, getQuestions, upsertBrief } from "@/lib/api";
 import { getRooms } from "@/lib/rooms";
 import { BRIEF_SECTIONS, ROOM_TYPES } from "@/lib/constants";
 import { generateFullPDF } from "@/lib/pdf-export";
+import { detectConflicts } from "@/lib/conflict-detector";
+import { validateErgonomics } from "@/lib/ergonomics-validator";
+import BudgetPanel from "@/components/BudgetPanel";
+import ConflictPanel from "@/components/ConflictPanel";
+import ErgonomicsPanel from "@/components/ErgonomicsPanel";
 import ProjectHeader from "@/components/ProjectHeader";
 import RefUploadCard from "@/components/RefUploadCard";
 import { Button } from "@/components/ui/button";
@@ -99,6 +104,26 @@ const BriefPage = () => {
     const filled = BRIEF_SECTIONS.filter(({ key }) => brief[key]?.trim().length > 0).length;
     return Math.round((filled / BRIEF_SECTIONS.length) * 100);
   })();
+
+  const detectedConflicts = useMemo(
+    () =>
+      detectConflicts(
+        brief,
+        rooms,
+        { raw_input: project?.raw_input, rooms_description: project?.rooms_description },
+      ),
+    [brief, rooms, project],
+  );
+
+  const ergonomicsWarnings = useMemo(
+    () =>
+      validateErgonomics(
+        brief,
+        rooms,
+        { raw_input: project?.raw_input, rooms_description: project?.rooms_description },
+      ),
+    [brief, rooms, project],
+  );
 
   const saveRefs = useCallback(async (nextRefs: UserRef[]) => {
     if (!projectId) return;
@@ -329,6 +354,14 @@ const BriefPage = () => {
                   );
                 })}
 
+                {group.key === "budget" && (
+                  <BudgetPanel
+                    brief={brief}
+                    rooms={rooms}
+                    project={project ?? {}}
+                  />
+                )}
+
                 {group.key === "taste" && (
                   <div className="rounded-lg border border-border bg-card p-5">
                     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -394,6 +427,18 @@ const BriefPage = () => {
           ))}
         </div>
 
+        {detectedConflicts.length > 0 && (
+          <div className="mt-16 border-t border-border pt-8">
+            <ConflictPanel conflicts={detectedConflicts} />
+          </div>
+        )}
+
+        {ergonomicsWarnings.length > 0 && (
+          <div className="mt-16 border-t border-border pt-8">
+            <ErgonomicsPanel warnings={ergonomicsWarnings} />
+          </div>
+        )}
+
         <div className="mt-16 border-t border-border pt-8">
           <div className="mb-6">
             <h3 className="label-style text-foreground">Следующий шаг</h3>
@@ -401,6 +446,17 @@ const BriefPage = () => {
               После анализа система извлечёт вкус клиента, выделит противоречия с вашими стандартами и подготовит уточняющие вопросы.
             </p>
           </div>
+
+          {ergonomicsWarnings.length > 0 && (
+            <div className="mb-4 flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950">
+              <Ruler className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" strokeWidth={1.5} />
+              <p className="text-sm text-amber-800 dark:text-amber-300">
+                Валидатор нашёл{" "}
+                <span className="font-medium">{ergonomicsWarnings.length} замечаний по эргономике</span>.
+                Проверьте раздел выше перед переходом к следующему этапу.
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-col gap-4 sm:flex-row">
             <Button onClick={handleSave} disabled={saving} className="flex-1">
