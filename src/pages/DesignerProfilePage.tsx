@@ -396,13 +396,15 @@ const DesignerProfilePage = () => {
       if (!trimmed) continue;
       // Stop at any new section header
       if (trimmed.match(/^#+\s|\*\*[А-ЯA-Z]{4,}/)) break;
-      // Match numbered items, lines starting with dash/em-dash, or lines ending with ?
-      if (trimmed.match(/^\d+[.)]\s*|^[-—]\s+|.*\?$/)) {
+      // Accept any line that looks like a question or item:
+      // numbered items, dash items, lines with ?, or any line that's not too short
+      if (trimmed.match(/^\d+[.)]\s*|^[-—•]\s+|.*\?$/) || trimmed.length > 15) {
         const question = trimmed
           .replace(/^\d+[.)]\s*/, '')
-          .replace(/^[-—]\s+/, '')
+          .replace(/^[-—•]\s+/, '')
           .trim();
-        if (question.length > 10) questions.push(question);
+        // Accept shorter items too — they might be valid questions
+        if (question.length > 3) questions.push(question);
       }
     }
 
@@ -845,13 +847,16 @@ const DesignerProfilePage = () => {
                   <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Как я буду это применять</h3>
                   <div className="text-[15px] leading-relaxed text-[#2D2D2D] space-y-2" style={{ color: '#2D2D2D' }}>
                     {(() => {
-                      const section = analysisResult.split(/\d+\.\s*КАК Я БУДУ|КАК Я БУДУ/)[1]?.split(/\d+\.\s*ХОЧУ УТОЧНИТЬ|ХОЧУ УТОЧНИТЬ/)[0] || '';
+                      const section = analysisResult.split(/\d+\.\s*КАК Я БУДУ ЭТО ПРИМЕНЯТЬ|\d+\.\s*КАК Я БУДУ|КАК Я БУДУ ЭТО ПРИМЕНЯТЬ|КАК Я БУДУ/)[1]?.split(/\d+\.\s*ХОЧУ УТОЧНИТЬ|ХОЧУ УТОЧНИТЬ/)[0] || '';
                       const cleanSection = section.replace(/\*\*/g, '').trim();
-                      // Split by newlines and filter out empty lines
-                      return cleanSection.split('\n').filter(line => line.trim()).map((line, i) => (
+                      // Split by newlines, filter out empty lines and heading remnants
+                      const lines = cleanSection.split('\n')
+                        .map(l => l.trim())
+                        .filter(l => l && l.length > 3 && !/^(это\s+применять|применять|секция|пункт)/i.test(l));
+                      return lines.map((line, i) => (
                         <p key={i} className="flex items-start gap-2">
                           <span className="text-primary mt-1">•</span>
-                          <span>{line.replace(/^-\s*/, '').trim()}</span>
+                          <span>{line.replace(/^[-—•]\s*/, '').replace(/^\d+[.)]\s*/, '').trim()}</span>
                         </p>
                       ));
                     })()}
@@ -908,18 +913,46 @@ const DesignerProfilePage = () => {
                       </Button>
                     </div>
                   ) : (
-                    // No questions extracted — show raw text from analysis
-                    <div className="text-[15px] leading-relaxed text-[#2D2D2D] space-y-3">
+                    // No questions extracted via pattern matching — show raw lines as editable inputs
+                    <div className="space-y-4">
                       {(() => {
                         const section = analysisResult.split(/\d+\.\s*ХОЧУ УТОЧНИТЬ|ХОЧУ УТОЧНИТЬ/i)[1] || '';
                         const cleanSection = section.replace(/\*\*/g, '').trim();
-                        const lines = cleanSection.split('\n').filter(line => line.trim());
-                        return lines.map((line, i) => (
-                          <p key={i} className="text-[15px] text-[#2D2D2D]">
-                            {line.match(/^\d+\./) ? line : `${i + 1}. ${line}`}
-                          </p>
+                        const rawLines = cleanSection.split('\n').filter(line => line.trim());
+                        // Show up to 4 input fields from the raw section
+                        const fallbackQuestions = rawLines.slice(0, 4).map(l => l.replace(/^\d+[.)]\s*/, '').trim()).filter(Boolean);
+                        return fallbackQuestions.map((question, idx) => (
+                          <div key={idx} className="space-y-2">
+                            <p className="text-[15px] text-[#2D2D2D] font-medium">
+                              {idx + 1}. {question}
+                            </p>
+                            <Input
+                              placeholder="Ваш ответ..."
+                              value={answers[idx] || ""}
+                              onChange={(e) => setAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                              className="bg-white text-[15px]"
+                            />
+                          </div>
                         ));
                       })()}
+                      {Object.keys(answers).length > 0 && (
+                        <Button
+                          onClick={updateAnalysisWithAnswers}
+                          disabled={updatingAnalysis}
+                          className="w-full mt-4"
+                        >
+                          {updatingAnalysis ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Обновление...</>
+                          ) : (
+                            <><Sparkles className="mr-2 h-4 w-4" /> Сохранить ответы и обновить анализ</>
+                          )}
+                        </Button>
+                      )}
+                      {Object.keys(answers).length === 0 && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Ответьте на вопросы выше, чтобы уточнить анализ
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
