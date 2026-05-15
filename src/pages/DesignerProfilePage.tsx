@@ -451,9 +451,13 @@ const DesignerProfilePage = () => {
 
 Ответь на русском языке в три блока:
 
-1. ЧТО Я ВИЖУ — кратко опиши стиль и подход дизайнера своими словами, опираясь в том числе на содержимое его документов (2-3 предложения)
+Проанализируй дизайнера глубоко — опирайся на ВСЕ источники: описание стиля, шкалы визуального языка, загруженные изображения портфолио, ссылки, документы базы знаний.
 
-2. КАК Я БУДУ ЭТО ПРИМЕНЯТЬ — конкретно как эти данные повлияют на генерацию брифов и концепт-бордов (3-4 пункта)
+Каждый блок должен начинаться с заголовка без нумерации — пиши ТОЛЬКО название блока (ЧТО Я ВИЖУ / КАК Я БУДУ ЭТО ПРИМЕНЯТЬ / ХОЧУ УТОЧНИТЬ), без цифр "1.", "2.", "3." перед ними.
+
+1. ЧТО Я ВИЖУ — развёрнутый анализ стиля дизайнера. Опиши: какие именно приёмы, материалы, цветовые решения предпочитает (со ссылкой на конкретные работы из портфолио); какие у него ключевые принципы и стандарты (из базы знаний). Не менее 5-7 предложений. Создай впечатление, что ты действительно изучил все материалы.
+
+2. КАК Я БУДУ ЭТО ПРИМЕНЯТЬ — для КАЖДОЙ шкалы визуального языка и КАЖДОГО загруженного документа напиши, как это повлияет на конкретные решения в брифе и концепт-борде. Минимум 5-6 конкретных пунктов.
 
 3. ХОЧУ УТОЧНИТЬ — задай 2-3 вопроса ТОЛЬКО о том, чего НЕТ ни в профиле, ни в загруженных документах. Если всё понятно — можно задать 1 вопрос или не задавать совсем.`;
 
@@ -520,7 +524,7 @@ const DesignerProfilePage = () => {
         .map(([idx, answer]) => `${parseInt(idx) + 1}. ${aiQuestions[parseInt(idx)]}\nОтвет: ${answer}`)
         .join('\n\n');
 
-      const systemPrompt = `Ты — профессиональный куратор дизайн-студии. Дизайнер ответил на уточняющие вопросы. Обнови секции "ЧТО Я ВИЖУ" и "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ" с учётом новых данных.`;
+      const systemPrompt = `Ты — профессиональный куратор дизайн-студии. Дизайнер ответил на уточняющие вопросы. Обнови секции "ЧТО Я ВИЖУ" и "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ" с учётом новых данных. Сделай анализ развёрнутым (5-7 предложений в первой секции, 5-6 пунктов во второй). Не используй цифры "1.", "2.", "3." перед названиями блоков — пиши только название блока.`;
 
       const userPrompt = `Вопросы и ответы дизайнера:\n${qaText}\n\nИсходный анализ:\n${analysisResult}\n\nОбнови анализ, сохранив структуру с тремя секциями.`;
 
@@ -829,41 +833,64 @@ const DesignerProfilePage = () => {
               </div>
             )}
 
-            {analysisResult && !analyzing && (
-              <div className="space-y-6">
-                {/* Section 1: What I See */}
-                <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
-                  <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Что я вижу</h3>
-                  <div className="text-[15px] leading-relaxed text-[#2D2D2D]" style={{ color: '#2D2D2D' }}>
-                    {(() => {
-                      const section = analysisResult.split(/\d+\.\s*ЧТО Я ВИЖУ|ЧТО Я ВИЖУ/)[1]?.split(/\d+\.\s*КАК Я БУДУ|КАК Я БУДУ/)[0] || '';
-                      return section.replace(/\*\*/g, '').trim() || analysisResult.split('\n').slice(0, 5).join('\n').replace(/\*\*/g, '');
-                    })()}
-                  </div>
-                </div>
+            {/* Helper: extract section between two headers (case-insensitive, handles ** bold, em-dash separators) */}
+            {(() => {
+              const stripBold = (s: string) => s.replace(/\*\*/g, '');
+              const clean = stripBold(analysisResult);
 
-                {/* Section 2: How I'll Apply */}
-                <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
-                  <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Как я буду это применять</h3>
-                  <div className="text-[15px] leading-relaxed text-[#2D2D2D] space-y-2" style={{ color: '#2D2D2D' }}>
-                    {(() => {
-                      const section = analysisResult.split(/\d+\.\s*КАК Я БУДУ ЭТО ПРИМЕНЯТЬ|\d+\.\s*КАК Я БУДУ|КАК Я БУДУ ЭТО ПРИМЕНЯТЬ|КАК Я БУДУ/)[1]?.split(/\d+\.\s*ХОЧУ УТОЧНИТЬ|ХОЧУ УТОЧНИТЬ/)[0] || '';
-                      const cleanSection = section.replace(/\*\*/g, '').trim();
-                      // Split by newlines, filter out empty lines and heading remnants
-                      const lines = cleanSection.split('\n')
-                        .map(l => l.trim())
-                        .filter(l => l && l.length > 3 && !/^(это\s+применять|применять|секция|пункт)/i.test(l));
-                      return lines.map((line, i) => (
-                        <p key={i} className="flex items-start gap-2">
-                          <span className="text-primary mt-1">•</span>
-                          <span>{line.replace(/^[-—•]\s*/, '').replace(/^\d+[.)]\s*/, '').trim()}</span>
-                        </p>
-                      ));
-                    })()}
-                  </div>
-                </div>
+              const extractBetween = (text: string, from: string, to?: string): string => {
+                // Match header: optional "1. " prefix, the header text itself, then rest of line
+                const fromRe = new RegExp(`(?:\\d+\\.\\s*)?${from}[^\\n]*`, 'i');
+                const match = text.match(fromRe);
+                if (!match) return '';
 
-                {/* Section 3: Questions / Answered Q&A */}
+                const after = text.slice(match.index! + match[0].length);
+                if (!to) return cleanup(after);
+
+                const toRe = new RegExp(`(?:\\d+\\.\\s*)?${to}[^\\n]*`, 'i');
+                const endMatch = after.match(toRe);
+                let result = endMatch ? after.slice(0, endMatch.index!) : after;
+                return cleanup(result);
+              };
+
+              // Strip trailing section-marker numbers (e.g. "2." or "2" at end of extracted text)
+              const cleanup = (s: string): string => {
+                return s.replace(/\s*\d+\.?\s*$/, '').trim();
+              };
+
+              const whatISee = extractBetween(clean, 'ЧТО Я ВИЖУ', 'КАК Я БУДУ');
+              const howIApply = extractBetween(clean, 'КАК Я БУДУ', 'ХОЧУ УТОЧНИТЬ');
+              const wantToClarify = extractBetween(clean, 'ХОЧУ УТОЧНИТЬ');
+
+              return (
+                <div className="space-y-6">
+                  {/* Section 1: What I See */}
+                  <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
+                    <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Что я вижу</h3>
+                    <div className="text-[15px] leading-relaxed text-[#2D2D2D]" style={{ color: '#2D2D2D' }}>
+                      {whatISee || '(нет данных)'}
+                    </div>
+                  </div>
+
+                  {/* Section 2: How I'll Apply */}
+                  <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
+                    <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Как я буду это применять</h3>
+                    <div className="text-[15px] leading-relaxed text-[#2D2D2D] space-y-2" style={{ color: '#2D2D2D' }}>
+                      {(() => {
+                        const lines = howIApply.split('\n')
+                          .map(l => l.trim())
+                          .filter(l => l && l.length > 3 && !/^(это\s+применять|применять|секция|пункт)/i.test(l));
+                        return lines.length > 0 ? lines.map((line, i) => (
+                          <p key={i} className="flex items-start gap-2">
+                            <span className="text-primary mt-1">•</span>
+                            <span>{line.replace(/^[-—•]\s*/, '').replace(/^\d+[.)]\s*/, '').trim()}</span>
+                          </p>
+                        )) : <p className="text-muted-foreground italic">(нет данных)</p>;
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Section 3: Questions / Answered Q&A */}
                 <div className="bg-[#F8F6F3] border border-[#D4C8B8] rounded-xl p-6 shadow-sm">
                   <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Хочу уточнить</h3>
 
@@ -916,9 +943,7 @@ const DesignerProfilePage = () => {
                     // No questions extracted via pattern matching — show raw lines as editable inputs
                     <div className="space-y-4">
                       {(() => {
-                        const section = analysisResult.split(/\d+\.\s*ХОЧУ УТОЧНИТЬ|ХОЧУ УТОЧНИТЬ/i)[1] || '';
-                        const cleanSection = section.replace(/\*\*/g, '').trim();
-                        const rawLines = cleanSection.split('\n').filter(line => line.trim());
+                        const rawLines = wantToClarify.split('\n').filter(line => line.trim());
                         // Show up to 4 input fields from the raw section
                         const fallbackQuestions = rawLines.slice(0, 4).map(l => l.replace(/^\d+[.)]\s*/, '').trim()).filter(Boolean);
                         return fallbackQuestions.map((question, idx) => (
