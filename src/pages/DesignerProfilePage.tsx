@@ -856,15 +856,15 @@ const DesignerProfilePage = () => {
               const clean = stripBold(analysisResult);
 
               const extractBetween = (text: string, from: string, to?: string): string => {
-                // Match header: optional "1. " prefix, the header text itself, then rest of line
-                const fromRe = new RegExp(`(?:\\d+\\.\\s*)?${from}[^\\n]*`, 'i');
+                // Match header: optional "1. " prefix, header text, then optional separator (colon, em-dash, spaces) — NOT content on same line
+                const fromRe = new RegExp(`(?:\\d+\\.\\s*)?${from}(?:\\s*[:—–]?\\s*)?`, 'i');
                 const match = text.match(fromRe);
                 if (!match) return '';
 
                 const after = text.slice(match.index! + match[0].length);
                 if (!to) return cleanup(after);
 
-                const toRe = new RegExp(`(?:\\d+\\.\\s*)?${to}[^\\n]*`, 'i');
+                const toRe = new RegExp(`(?:\\d+\\.\\s*)?${to}(?:\\s*[:—–]?\\s*)?`, 'i');
                 const endMatch = after.match(toRe);
                 let result = endMatch ? after.slice(0, endMatch.index!) : after;
                 return cleanup(result);
@@ -875,8 +875,8 @@ const DesignerProfilePage = () => {
                 return s.replace(/\s*\d+\.?\s*$/, '').trim();
               };
 
-              const whatISee = extractBetween(clean, 'ЧТО Я ВИЖУ', 'КАК Я БУДУ');
-              const howIApply = extractBetween(clean, 'КАК Я БУДУ', 'ХОЧУ УТОЧНИТЬ');
+              const whatISee = extractBetween(clean, 'ЧТО Я ВИЖУ', 'КАК Я БУДУ ЭТО ПРИМЕНЯТЬ');
+              const howIApply = extractBetween(clean, 'КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', 'ХОЧУ УТОЧНИТЬ');
               const wantToClarify = extractBetween(clean, 'ХОЧУ УТОЧНИТЬ');
 
               return (
