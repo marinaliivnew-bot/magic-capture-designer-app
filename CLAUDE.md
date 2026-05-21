@@ -19,6 +19,8 @@ React + Tailwind · Supabase (PostgreSQL + Edge Functions) · Anthropic API (Cla
 
 **Перед задачей:** прочитай `PROJECT_CONTEXT.md` и `ROADMAP_v3.md`.
 
+| `ADR.md` | Лог архитектурных решений — почему выбрали X, а не Y |
+
 ## Структура проекта
 
 ```
@@ -41,6 +43,11 @@ supabase/
 5. **Supabase policies:** всегда `DROP POLICY IF EXISTS` перед `CREATE POLICY`.
 6. **Не трогай StyleNarrowingPage**, если задача касается BriefPage — это разные экраны.
 7. После выполнения задачи — ставь ✅ в `ROADMAP_v3.md`.
+8. После каждого раунда изменений:
+  - ✅ Проверить типы (types.ts)
+  - ✅ Задеплоить Edge Functions
+  - ✅ Применить миграции
+  - ✅ Протестировать flow от начала до конца
 
 ## Пример стартовой фразы
 
