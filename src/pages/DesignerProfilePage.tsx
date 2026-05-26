@@ -54,11 +54,6 @@ const DesignerProfilePage = () => {
 
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [aiQuestions, setAiQuestions] = useState<string[]>([]);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [updatingAnalysis, setUpdatingAnalysis] = useState(false);
-  // Saved Q&A pairs — set after designer submits answers
-  const [answeredQA, setAnsweredQA] = useState<{ q: string; a: string }[] | null>(null);
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [knowledgeFiles, setKnowledgeFiles] = useState<UploadedFile[]>([]);
@@ -144,14 +139,6 @@ const DesignerProfilePage = () => {
         // Load saved AI analysis
         if (data.ai_analysis) {
           setAnalysisResult(data.ai_analysis);
-        }
-        // Restore answered Q&A if the designer already submitted answers
-        const savedQA = data.hard_constraints?._qa as { q: string; a: string }[] | undefined;
-        if (savedQA && savedQA.length > 0) {
-          setAnsweredQA(savedQA);
-          setAiQuestions([]); // answered — no input fields needed
-        } else if (data.ai_questions) {
-          setAiQuestions(Array.isArray(data.ai_questions) ? data.ai_questions : []);
         }
         
         console.log("[loadProfile] Profile loaded:", data.designer_name);
@@ -381,34 +368,75 @@ const DesignerProfilePage = () => {
     }));
   };
 
-  // Extract questions from AI analysis text
-  const extractQuestions = (text: string): string[] => {
-    const questions: string[] = [];
-    const lowerText = text.toLowerCase();
-    const sectionIdx = lowerText.indexOf('хочу уточнить');
-    if (sectionIdx === -1) return questions;
+  const stripAnalysisHeader = (text: string, header: string) => {
+    return text
+      .replace(/\*\*/g, '')
+      .replace(new RegExp(`^\\s*(?:\\d+\\.\\s*)?${header}\\s*[:—–-]?\\s*`, 'i'), '')
+      .trim();
+  };
 
-    const sectionText = text.slice(sectionIdx);
-    const lines = sectionText.split('\n').slice(1); // skip the header line
+  const cleanAnalysisContent = (text: string) => {
+    return text
+      .replace(/\*\*/g, '')
+      .replace(/\n+\s*(?:\d+[.)]\s*)?(?:КАК Я БУДУ ЭТО ПРИМЕНЯТЬ|ХОЧУ УТОЧНИТЬ)\s*[:—–-]?[\s\S]*$/i, '')
+      .replace(/\s+(?:\d+[.)])\s*$/g, '')
+      .trim();
+  };
 
-    for (const line of lines) {
-      const trimmed = line.trim().replace(/\*\*/g, '');
-      if (!trimmed) continue;
-      // Stop at any new section header
-      if (trimmed.match(/^#+\s|\*\*[А-ЯA-Z]{4,}/)) break;
-      // Accept any line that looks like a question or item:
-      // numbered items, dash items, lines with ?, or any line that's not too short
-      if (trimmed.match(/^\d+[.)]\s*|^[-—•]\s+|.*\?$/) || trimmed.length > 15) {
-        const question = trimmed
-          .replace(/^\d+[.)]\s*/, '')
-          .replace(/^[-—•]\s+/, '')
-          .trim();
-        // Accept shorter items too — they might be valid questions
-        if (question.length > 3) questions.push(question);
-      }
+  const formatAnalysisBlock = (header: string, text: string) => {
+    return `${header}\n${cleanAnalysisContent(stripAnalysisHeader(text, header))}`;
+  };
+
+  const countExpandedSentences = (text: string) => {
+    const cleaned = cleanAnalysisContent(stripAnalysisHeader(text, 'ЧТО Я ВИЖУ'))
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return cleaned
+      .split(/(?<=[.!?…])\s+/)
+      .map((sentence) => sentence.trim())
+      .filter((sentence) => sentence.length >= 35).length;
+  };
+
+  const countActionItems = (text: string) => {
+    const cleaned = cleanAnalysisContent(stripAnalysisHeader(text, 'КАК Я БУДУ ЭТО ПРИМЕНЯТЬ'));
+
+    return cleaned
+      .split('\n')
+      .map((line) => line.replace(/^[-—•]\s*/, '').replace(/^\d+[.)]\s*/, '').trim())
+      .filter((line) => (
+        line.length >= 35 &&
+        !/^(как я буду это применять|секция|пункт|хочу уточнить)/i.test(line)
+      )).length;
+  };
+
+  const validateProfileAnalysis = (whatISee: string, howIApply: string) => {
+    const sentenceCount = countExpandedSentences(whatISee);
+    const actionCount = countActionItems(howIApply);
+    const issues: string[] = [];
+
+    if (sentenceCount < 10) {
+      issues.push(`блок "Что я вижу" слишком короткий: ${sentenceCount}/10 развёрнутых предложений`);
+    }
+    if (actionCount < 10) {
+      issues.push(`блок "Как я буду это применять" слишком короткий: ${actionCount}/10 пунктов`);
     }
 
-    return questions.slice(0, 3);
+    return { ok: issues.length === 0, issues, sentenceCount, actionCount };
+  };
+
+  const invokeProfileAnalysis = async (systemPrompt: string, userPrompt: string, imageUrls?: string[]) => {
+    const { data, error } = await supabase.functions.invoke('analyze-profile', {
+      body: { systemPrompt, userPrompt, imageUrls },
+    });
+
+    const text = data?.text || "";
+    if (error || !text.trim()) {
+      const detail = data?.details ? ` (${String(data.details).slice(0, 200)})` : "";
+      throw new Error(error?.message || data?.error || `Нет ответа от AI${detail}`);
+    }
+
+    return text.trim();
   };
 
   // Analyze profile with OpenAI
@@ -420,8 +448,6 @@ const DesignerProfilePage = () => {
 
     setAnalyzing(true);
     setAnalysisResult(null);
-    setAnsweredQA(null); // clear old answered Q&A when running fresh analysis
-    setAnswers({});
 
     try {
       const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
@@ -469,31 +495,62 @@ const DesignerProfilePage = () => {
 
 Напиши "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ" — ровно 15 конкретных пунктов-действий. Каждый с новой строки, без нумерации. По 3 пункта на шкалу: температура (цвета), строгость (компоновка), фактурность (материалы), цветность (палитра), стиль (направленность). Формулируй как прямые действия: "Исключу...", "Буду отдавать предпочтение...". Не пиши "Хочу уточнить" и не задавай вопросы.`;
 
-      // Run both calls in parallel
-      const [result1, result2] = await Promise.all([
-        supabase.functions.invoke('analyze-profile', {
-          body: { systemPrompt: promptBlock1, userPrompt: baseUserPrompt, imageUrls: portfolioImageUrls },
-        }),
-        supabase.functions.invoke('analyze-profile', {
-          body: { systemPrompt: promptBlock2, userPrompt: baseUserPrompt },
-        }),
+      let [text1, text2] = await Promise.all([
+        invokeProfileAnalysis(promptBlock1, baseUserPrompt, portfolioImageUrls),
+        invokeProfileAnalysis(promptBlock2, baseUserPrompt),
       ]);
+      text1 = formatAnalysisBlock('ЧТО Я ВИЖУ', text1);
+      text2 = formatAnalysisBlock('КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', text2);
 
-      const text1 = result1.data?.text || "";
-      const text2 = result2.data?.text || "";
-      
-      if ((result1.error || !text1) && (result2.error || !text2)) {
-        const detail = (result1.error || result2.error) ? String(result1.error || result2.error).slice(0, 200) : "";
-        throw new Error(`Нет ответа от AI${detail}`);
+      let validation = validateProfileAnalysis(text1, text2);
+
+      if (!validation.ok) {
+        toast.info("AI вернул слишком короткий анализ, пробую расширить результат");
+
+        const retryTasks: Promise<string>[] = [];
+        const retryTargets: Array<"whatISee" | "howIApply"> = [];
+
+        if (validation.sentenceCount < 10) {
+          retryTargets.push("whatISee");
+          retryTasks.push(invokeProfileAnalysis(
+            `${promptBlock1}
+
+Предыдущий ответ был слишком коротким. Перепиши секцию заново: минимум 10, лучше 15 развёрнутых предложений. Не сжимай мысли в один абзац, не обобщай, опирайся на все доступные поля профиля, базу знаний и портфолио. Верни только секцию "ЧТО Я ВИЖУ".`,
+            baseUserPrompt,
+            portfolioImageUrls,
+          ));
+        }
+
+        if (validation.actionCount < 10) {
+          retryTargets.push("howIApply");
+          retryTasks.push(invokeProfileAnalysis(
+            `${promptBlock2}
+
+Предыдущий ответ был слишком коротким. Перепиши секцию заново: минимум 10, лучше 15 отдельных практических пунктов. Каждый пункт должен быть на новой строке и описывать конкретное действие для будущих брифов, концепт-бордов или проектных решений. Верни только секцию "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ".`,
+            baseUserPrompt,
+          ));
+        }
+
+        const retryResults = await Promise.all(retryTasks);
+        retryResults.forEach((retryText, idx) => {
+          if (retryTargets[idx] === "whatISee") {
+            text1 = formatAnalysisBlock('ЧТО Я ВИЖУ', retryText);
+          }
+          if (retryTargets[idx] === "howIApply") {
+            text2 = formatAnalysisBlock('КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', retryText);
+          }
+        });
+
+        validation = validateProfileAnalysis(text1, text2);
+      }
+
+      if (!validation.ok) {
+        throw new Error(`AI вернул слишком короткий анализ: ${validation.issues.join("; ")}`);
       }
 
       const analysisText = [text1, text2].filter(Boolean).join('\n\n');
       
       setAnalysisResult(analysisText);
-      
-      // Extract questions from analysis
-      const questions = extractQuestions(analysisText);
-      setAiQuestions(questions);
       
       // Save to database — clear old answered Q&A when new analysis is generated
       const { _qa: _removed, ...otherConstraints } = profile.hard_constraints || {};
@@ -501,7 +558,7 @@ const DesignerProfilePage = () => {
         ...profile,
         hard_constraints: otherConstraints,
         ai_analysis: analysisText,
-        ai_questions: questions,
+        ai_questions: [],
       });
 
       toast.success("Анализ сохранён");
@@ -510,60 +567,6 @@ const DesignerProfilePage = () => {
       console.error(e);
     } finally {
       setAnalyzing(false);
-    }
-  };
-
-  // Update analysis with designer answers
-  const updateAnalysisWithAnswers = async () => {
-    if (Object.keys(answers).length === 0) {
-      toast.error("Сначала ответьте на вопросы");
-      return;
-    }
-
-    setUpdatingAnalysis(true);
-    
-    try {
-      // Build Q&A text
-      const qaText = Object.entries(answers)
-        .map(([idx, answer]) => `${parseInt(idx) + 1}. ${aiQuestions[parseInt(idx)]}\nОтвет: ${answer}`)
-        .join('\n\n');
-
-      const systemPrompt = `Ты — профессиональный куратор дизайн-студии. Дизайнер ответил на уточняющие вопросы. Обнови секции "ЧТО Я ВИЖУ" и "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ" с учётом новых данных. Сделай анализ максимально развёрнутым (12-15 предложений в первой секции, 12-15 пунктов во второй). Не используй цифры "1.", "2.", "3." перед названиями блоков — пиши только название блока. НЕ добавляй секцию "ХОЧУ УТОЧНИТЬ".`;
-
-      const userPrompt = `Вопросы и ответы дизайнера:\n${qaText}\n\nИсходный анализ:\n${analysisResult}\n\nОбнови анализ, сохранив структуру с двумя секциями.`;
-
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('analyze-profile', {
-        body: { systemPrompt, userPrompt },
-      });
-
-      if (fnError || !fnData?.text) {
-        const detail = fnData?.details ? ` (${fnData.details.slice(0, 200)})` : "";
-        throw new Error(fnError?.message || fnData?.error || `Нет ответа от AI${detail}`);
-      }
-
-      const updatedAnalysis = fnData.text || analysisResult;
-
-      // Build answered Q&A pairs for persistent display
-      const qa = aiQuestions.map((q, i) => ({ q, a: answers[i] || "" }));
-      setAnsweredQA(qa);
-      setAiQuestions([]); // no more input fields — answers are saved
-      setAnalysisResult(updatedAnalysis);
-
-      // Save to database: store Q&A in hard_constraints._qa, clear ai_questions
-      const { _qa: _old, ...otherConstraints } = profile.hard_constraints || {};
-      await upsertDesignerProfile({
-        ...profile,
-        hard_constraints: { ...otherConstraints, _qa: qa },
-        ai_analysis: updatedAnalysis,
-        ai_questions: [],
-      });
-
-      toast.success("Анализ обновлён с учётом ваших ответов");
-    } catch (e) {
-      toast.error("Ошибка обновления анализа");
-      console.error(e);
-    } finally {
-      setUpdatingAnalysis(false);
     }
   };
 
@@ -830,15 +833,8 @@ const DesignerProfilePage = () => {
               </div>
             )}
 
-            {updatingAnalysis && (
-              <div className="space-y-3">
-                <div className="h-3 bg-primary/20 rounded animate-pulse w-full" />
-                <p className="text-sm text-muted-foreground text-center">Обновляем анализ с учётом ваших ответов...</p>
-              </div>
-            )}
-
             {/* Helper: extract section between two headers (case-insensitive, handles ** bold, em-dash separators) */}
-            {(() => {
+            {analysisResult && (() => {
               const stripBold = (s: string) => s.replace(/\*\*/g, '');
               const clean = stripBold(analysisResult);
 
@@ -857,14 +853,12 @@ const DesignerProfilePage = () => {
                 return cleanup(result);
               };
 
-              // Strip trailing section-marker numbers (e.g. "2." or "2" at end of extracted text)
               const cleanup = (s: string): string => {
-                return s.replace(/\s*\d+\.?\s*$/, '').trim();
+                return cleanAnalysisContent(s);
               };
 
               const whatISee = extractBetween(clean, 'ЧТО Я ВИЖУ', 'КАК Я БУДУ ЭТО ПРИМЕНЯТЬ');
               const howIApply = extractBetween(clean, 'КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', 'ХОЧУ УТОЧНИТЬ');
-              const wantToClarify = extractBetween(clean, 'ХОЧУ УТОЧНИТЬ');
 
               return (
                 <div className="space-y-6">
@@ -893,102 +887,9 @@ const DesignerProfilePage = () => {
                       })()}
                     </div>
                   </div>
-
-                  {/* Section 3: Questions / Answered Q&A — only shown if content exists (backward compat for old analyses) */}
-                  {(wantToClarify.trim() || aiQuestions.length > 0 || (answeredQA && answeredQA.length > 0)) && (
-                <div className="bg-[#F8F6F3] border border-[#D4C8B8] rounded-xl p-6 shadow-sm">
-                  <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Хочу уточнить</h3>
-
-                  {answeredQA && answeredQA.length > 0 ? (
-                    // Saved Q&A — show read-only, no inputs
-                    <div className="space-y-4">
-                      {answeredQA.map((item, idx) => (
-                        <div key={idx} className="space-y-1">
-                          <p className="text-[15px] text-[#2D2D2D] font-medium">
-                            {idx + 1}. {item.q.replace(/\*\*/g, '').trim()}
-                          </p>
-                          <p className="text-[14px] text-[#5C5C5C] bg-white rounded-lg px-3 py-2 border border-[#E5E5E5]">
-                            {item.a || <span className="italic text-muted-foreground">—</span>}
-                          </p>
-                        </div>
-                      ))}
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Ответы учтены в анализе. Нажмите «Проанализировать профиль» чтобы обновить вопросы.
-                      </p>
-                    </div>
-                  ) : aiQuestions.length > 0 ? (
-                    // Unanswered questions — show input fields
-                    <div className="space-y-4">
-                      {aiQuestions.map((question, idx) => (
-                        <div key={idx} className="space-y-2">
-                          <p className="text-[15px] text-[#2D2D2D] font-medium">
-                            {idx + 1}. {question.replace(/\*\*/g, '').trim()}
-                          </p>
-                          <Input
-                            placeholder="Ваш ответ..."
-                            value={answers[idx] || ""}
-                            onChange={(e) => setAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
-                            className="bg-white text-[15px]"
-                          />
-                        </div>
-                      ))}
-                      <Button
-                        onClick={updateAnalysisWithAnswers}
-                        disabled={updatingAnalysis || Object.keys(answers).length === 0}
-                        className="w-full mt-4"
-                      >
-                        {updatingAnalysis ? (
-                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Обновление...</>
-                        ) : (
-                          <><Sparkles className="mr-2 h-4 w-4" /> Сохранить ответы и обновить анализ</>
-                        )}
-                      </Button>
-                    </div>
-                  ) : (
-                    // No questions extracted via pattern matching — show raw lines as editable inputs
-                    <div className="space-y-4">
-                      {(() => {
-                        const rawLines = wantToClarify.split('\n').filter(line => line.trim());
-                        // Show up to 4 input fields from the raw section
-                        const fallbackQuestions = rawLines.slice(0, 4).map(l => l.replace(/^\d+[.)]\s*/, '').trim()).filter(Boolean);
-                        return fallbackQuestions.map((question, idx) => (
-                          <div key={idx} className="space-y-2">
-                            <p className="text-[15px] text-[#2D2D2D] font-medium">
-                              {idx + 1}. {question}
-                            </p>
-                            <Input
-                              placeholder="Ваш ответ..."
-                              value={answers[idx] || ""}
-                              onChange={(e) => setAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
-                              className="bg-white text-[15px]"
-                            />
-                          </div>
-                        ));
-                      })()}
-                      {Object.keys(answers).length > 0 && (
-                        <Button
-                          onClick={updateAnalysisWithAnswers}
-                          disabled={updatingAnalysis}
-                          className="w-full mt-4"
-                        >
-                          {updatingAnalysis ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Обновление...</>
-                          ) : (
-                            <><Sparkles className="mr-2 h-4 w-4" /> Сохранить ответы и обновить анализ</>
-                          )}
-                        </Button>
-                      )}
-                      {Object.keys(answers).length === 0 && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Ответьте на вопросы выше, чтобы уточнить анализ
-                        </p>
-                      )}
-                    </div>
-                  )}
                 </div>
-              )}
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       </div>
