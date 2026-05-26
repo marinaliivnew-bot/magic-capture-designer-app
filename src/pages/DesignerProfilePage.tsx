@@ -25,6 +25,18 @@ interface UploadedFile {
   url: string;
 }
 
+interface ExtractedSource {
+  file: UploadedFile;
+  source: "Портфолио" | "База знаний";
+  text: string;
+  truncated?: boolean;
+  originalCharCount?: number;
+  includedCharCount: number;
+  note?: string;
+}
+
+const EXTRACTED_SOURCE_TEXT_BUDGET = 45_000;
+
 const getSessionId = () => {
   let id = localStorage.getItem("designer_session_id");
   if (!id) {
@@ -439,6 +451,65 @@ const DesignerProfilePage = () => {
     return text.trim();
   };
 
+  const isTextExtractableFile = (file: UploadedFile) => {
+    const lowerName = file.name.toLowerCase();
+    const lowerPath = file.path.toLowerCase();
+    return [".pdf", ".txt", ".doc", ".docx"].some((ext) => lowerName.endsWith(ext) || lowerPath.endsWith(ext));
+  };
+
+  const extractSourceFile = async (
+    file: UploadedFile,
+    source: ExtractedSource["source"],
+  ): Promise<ExtractedSource> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('extract-text', {
+        body: { filePath: file.path },
+      });
+
+      const text = error || !data?.text ? "текст недоступен" : String(data.text);
+      return {
+        file,
+        source,
+        text,
+        truncated: Boolean(data?.truncated),
+        originalCharCount: typeof data?.originalCharCount === "number" ? data.originalCharCount : text.length,
+        includedCharCount: text.length,
+        note: error ? "ошибка извлечения" : data?.note,
+      };
+    } catch {
+      return {
+        file,
+        source,
+        text: "ошибка чтения",
+        includedCharCount: 0,
+        note: "ошибка чтения",
+      };
+    }
+  };
+
+  const buildExtractedSourcesBlock = (sources: ExtractedSource[]) => {
+    if (sources.length === 0) return "";
+
+    let remaining = EXTRACTED_SOURCE_TEXT_BUDGET;
+    const blocks: string[] = [];
+
+    for (const source of sources) {
+      const sourceLabel = `${source.source}: ${source.file.name}`;
+      const sourceText = source.text.trim();
+      const textForPrompt = remaining > 0 ? sourceText.slice(0, remaining) : "";
+      const promptTruncated = sourceText.length > textForPrompt.length;
+      remaining -= textForPrompt.length;
+
+      blocks.push([
+        `### ${sourceLabel}`,
+        `Статус: ${source.note || "текст извлечён"}; символов извлечено: ${source.originalCharCount ?? sourceText.length}; включено в анализ: ${textForPrompt.length}${source.truncated || promptTruncated ? "; текст сокращён" : ""}.`,
+        textForPrompt || "[Текст не включён: общий лимит источников исчерпан]",
+      ].join("\n"));
+    }
+
+    return `\n\nИЗВЛЕЧЁННЫЙ ТЕКСТ ИЗ ФАЙЛОВ (опирайся на эти источники, называй файл при конкретных выводах):\n${blocks.join("\n\n---\n\n")}`;
+  };
+
   // Analyze profile with OpenAI
   const analyzeProfile = async () => {
     if (!profile.designer_name && !profile.style_description && !profile.custom_ergonomics_text) {
@@ -452,52 +523,52 @@ const DesignerProfilePage = () => {
     try {
       const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
 
-      // Extract text from knowledge base files
-      const extractedTexts = await Promise.all(
-        knowledgeFiles.map(async (file) => {
-          try {
-            const { data, error } = await supabase.functions.invoke('extract-text', {
-              body: { filePath: file.path }
-            });
-            if (error || !data?.text) return `[${file.name}]: текст недоступен`;
-            return `[${file.name}]:\n${data.text}`;
-          } catch {
-            return `[${file.name}]: ошибка чтения`;
-          }
-        })
+      const portfolioDocumentFiles = uploadedFiles.filter(isTextExtractableFile);
+      const sourceFiles = [
+        ...portfolioDocumentFiles.map((file) => ({ file, source: "Портфолио" as const })),
+        ...knowledgeFiles.map((file) => ({ file, source: "База знаний" as const })),
+      ];
+
+      const extractedSources = await Promise.all(
+        sourceFiles.map(({ file, source }) => extractSourceFile(file, source)),
       );
 
-      const knowledgeBaseText = extractedTexts.length > 0
-        ? `\n\nБАЗА ЗНАНИЙ ДИЗАЙНЕРА (содержимое загруженных документов):\n${extractedTexts.join('\n\n---\n\n')}`
-        : '';
+      const sourceSummary = [
+        `Изображения портфолио: ${uploadedFiles.filter((file) => !isTextExtractableFile(file)).length} загружено, ${Math.min(uploadedFiles.filter((file) => !isTextExtractableFile(file)).length, 6)} отправлено в vision.`,
+        `Документы портфолио: ${portfolioDocumentFiles.map((file) => file.name).join(", ") || "нет"}.`,
+        `Файлы базы знаний: ${knowledgeFiles.map((file) => file.name).join(", ") || "нет"}.`,
+        `Pinterest/референсы: ${linkRefs.length > 0 ? linkRefs.join("; ") : "нет"}.`,
+      ].join("\n");
+
+      const extractedSourcesBlock = buildExtractedSourcesBlock(extractedSources);
 
       // TWO parallel AI calls — one per block — to bypass max_tokens limit
       const baseUserPrompt = `Имя: ${profile.designer_name || "Не указано"}
 Описание стиля: ${profile.style_description || "Не заполнено"}
 Визуальный язык (шкалы 1-10): ${Object.entries(profile.ergonomics_rules || {}).map(([k,v]) => `${k}: ${v}`).join(', ')}
 Стандарты и ограничения: ${profile.custom_ergonomics_text || "Не заполнено"}
-Ссылки на Pinterest/референсы: ${linkRefs.length > 0 ? linkRefs.join("\n") : "Нет"}
-Портфолио (изображений загружено): ${uploadedFiles.filter(f => !f.name.endsWith('.pdf')).length}${knowledgeBaseText}`;
+СВОДКА ИСТОЧНИКОВ:
+${sourceSummary}${extractedSourcesBlock}`;
 
       // Image URLs for vision analysis (non-PDF portfolio files only, max 6)
       const portfolioImageUrls = uploadedFiles
-        .filter(f => !f.name.endsWith('.pdf'))
+        .filter((file) => !isTextExtractableFile(file))
         .slice(0, 6)
         .map(f => f.url);
 
       // Block 1 prompt: "ЧТО Я ВИЖУ"
       const promptBlock1 = `Ты — куратор дизайн-студии. Проанализируй стиль дизайнера по данным профиля. Если есть "БАЗА ЗНАНИЙ ДИЗАЙНЕРА" — прочитай полностью и цитируй. ОТВЕЧАЙ НА РУССКОМ, ТОЛЬКО текст секции.
 
-Напиши "ЧТО Я ВИЖУ" — ровно 15 развёрнутых предложений о стиле дизайнера. Каждое предложение — новая конкретная мысль. Объясняй КАК ИМЕННО и ПОЧЕМУ, избегай общих фраз. Разбери: общую эстетику, цвета и оттенки, материалы и фактуры, приёмы из портфолио, стандарты и принципы, подход к клиенту, итоговую характеристику. Не пиши "Хочу уточнить" и не задавай вопросы.`;
+Напиши "ЧТО Я ВИЖУ" — ровно 15 развёрнутых предложений о стиле дизайнера. Каждое предложение — новая конкретная мысль. Объясняй КАК ИМЕННО и ПОЧЕМУ, избегай общих фраз. Разбери: общую эстетику, цвета и оттенки, материалы и фактуры, приёмы из портфолио, стандарты и принципы, подход к клиенту, итоговую характеристику. Если вывод основан на файле, упоминай источник по имени файла. Если Pinterest-ссылка не прочитана как изображение, не делай вид, что видел её содержимое. Не пиши "Хочу уточнить" и не задавай вопросы.`;
 
       // Block 2 prompt: "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ"
       const promptBlock2 = `Ты — куратор дизайн-студии. На основе профиля дизайнера напиши практические рекомендации. ОТВЕЧАЙ НА РУССКОМ, ТОЛЬКО текст секции.
 
-Напиши "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ" — ровно 15 конкретных пунктов-действий. Каждый с новой строки, без нумерации. По 3 пункта на шкалу: температура (цвета), строгость (компоновка), фактурность (материалы), цветность (палитра), стиль (направленность). Формулируй как прямые действия: "Исключу...", "Буду отдавать предпочтение...". Не пиши "Хочу уточнить" и не задавай вопросы.`;
+Напиши "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ" — ровно 15 конкретных пунктов-действий. Каждый с новой строки, без нумерации. По 3 пункта на шкалу: температура (цвета), строгость (компоновка), фактурность (материалы), цветность (палитра), стиль (направленность). Формулируй как прямые действия: "Исключу...", "Буду отдавать предпочтение...". Опирай действия на профиль, извлечённые документы и видимые изображения портфолио; избегай универсальных советов, которые подошли бы любому дизайнеру. Не пиши "Хочу уточнить" и не задавай вопросы.`;
 
       let [text1, text2] = await Promise.all([
         invokeProfileAnalysis(promptBlock1, baseUserPrompt, portfolioImageUrls),
-        invokeProfileAnalysis(promptBlock2, baseUserPrompt),
+        invokeProfileAnalysis(promptBlock2, baseUserPrompt, portfolioImageUrls),
       ]);
       text1 = formatAnalysisBlock('ЧТО Я ВИЖУ', text1);
       text2 = formatAnalysisBlock('КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', text2);
@@ -528,6 +599,7 @@ const DesignerProfilePage = () => {
 
 Предыдущий ответ был слишком коротким. Перепиши секцию заново: минимум 10, лучше 15 отдельных практических пунктов. Каждый пункт должен быть на новой строке и описывать конкретное действие для будущих брифов, концепт-бордов или проектных решений. Верни только секцию "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ".`,
             baseUserPrompt,
+            portfolioImageUrls,
           ));
         }
 

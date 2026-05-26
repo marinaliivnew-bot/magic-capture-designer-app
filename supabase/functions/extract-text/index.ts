@@ -44,7 +44,8 @@ serve(async (req) => {
 
     let text = "";
     let truncated = false;
-    const MAX_CHARS = 3000;
+    let note = "текст извлечён";
+    const MAX_CHARS = 30_000;
 
     // TXT files — read directly
     if (lowerName.endsWith(".txt")) {
@@ -98,19 +99,25 @@ serve(async (req) => {
         // If extraction yielded nothing meaningful — note it
         if (text.length < 50) {
           text = "[PDF содержит преимущественно изображения или нестандартное кодирование — текст недоступен для автоматического извлечения]";
+          note = "PDF без доступного текстового слоя";
         }
       } catch (pdfError) {
         console.error("PDF parse error:", pdfError);
         text = "[Ошибка извлечения текста из PDF]";
+        note = "ошибка извлечения PDF";
       }
     }
     // DOC/DOCX — not parseable without native libs
     else if (lowerName.endsWith(".doc") || lowerName.endsWith(".docx")) {
       text = "[DOC/DOCX формат — текст недоступен для автоматического извлечения. Учти имя файла при анализе.]";
+      note = "DOC/DOCX пока не извлекается";
     }
     else {
       text = "[Неизвестный формат файла]";
+      note = "неизвестный формат файла";
     }
+
+    const originalCharCount = text.length;
 
     // Truncate if too long
     if (text.length > MAX_CHARS) {
@@ -119,7 +126,14 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ text, fileName, truncated }),
+      JSON.stringify({
+        text,
+        fileName,
+        truncated,
+        originalCharCount,
+        includedCharCount: text.length,
+        note,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
