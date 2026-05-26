@@ -50,7 +50,7 @@ serve(async (req) => {
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent.length === 1 ? userContent[0].text : userContent },
         ],
-        max_tokens: 3000,
+        max_tokens: 8000,
         temperature: 0.7,
       }),
     });
