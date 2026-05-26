@@ -987,7 +987,6 @@ const DesignerProfilePage = () => {
                   )}
                 </div>
               )}
-              </div>
             )}
           </div>
         </div>
