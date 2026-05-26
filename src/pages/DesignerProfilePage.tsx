@@ -35,6 +35,29 @@ interface ExtractedSource {
   note?: string;
 }
 
+interface AnalysisDebug {
+  portfolioImagesTotal: number;
+  portfolioImagesSent: number;
+  portfolioDocumentsTotal: number;
+  knowledgeFilesTotal: number;
+  pinterestLinksTotal: number;
+  promptTextBudget: number;
+  promptTextIncluded: number;
+  validation?: {
+    sentenceCount: number;
+    actionCount: number;
+    retried: boolean;
+  };
+  sources: Array<{
+    name: string;
+    source: ExtractedSource["source"];
+    note: string;
+    originalCharCount: number;
+    includedCharCount: number;
+    truncated: boolean;
+  }>;
+}
+
 const EXTRACTED_SOURCE_TEXT_BUDGET = 45_000;
 
 const getSessionId = () => {
@@ -66,6 +89,7 @@ const DesignerProfilePage = () => {
 
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisDebug, setAnalysisDebug] = useState<AnalysisDebug | null>(null);
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [knowledgeFiles, setKnowledgeFiles] = useState<UploadedFile[]>([]);
@@ -510,6 +534,42 @@ const DesignerProfilePage = () => {
     return `\n\nИЗВЛЕЧЁННЫЙ ТЕКСТ ИЗ ФАЙЛОВ (опирайся на эти источники, называй файл при конкретных выводах):\n${blocks.join("\n\n---\n\n")}`;
   };
 
+  const buildAnalysisDebug = (
+    sources: ExtractedSource[],
+    portfolioImagesTotal: number,
+    portfolioImagesSent: number,
+    portfolioDocumentsTotal: number,
+    knowledgeFilesTotal: number,
+    pinterestLinksTotal: number,
+  ): AnalysisDebug => {
+    let remaining = EXTRACTED_SOURCE_TEXT_BUDGET;
+    const debugSources = sources.map((source) => {
+      const sourceTextLength = source.text.trim().length;
+      const includedCharCount = Math.max(0, Math.min(sourceTextLength, remaining));
+      remaining -= includedCharCount;
+
+      return {
+        name: source.file.name,
+        source: source.source,
+        note: source.note || "текст извлечён",
+        originalCharCount: source.originalCharCount ?? sourceTextLength,
+        includedCharCount,
+        truncated: Boolean(source.truncated || sourceTextLength > includedCharCount),
+      };
+    });
+
+    return {
+      portfolioImagesTotal,
+      portfolioImagesSent,
+      portfolioDocumentsTotal,
+      knowledgeFilesTotal,
+      pinterestLinksTotal,
+      promptTextBudget: EXTRACTED_SOURCE_TEXT_BUDGET,
+      promptTextIncluded: debugSources.reduce((sum, source) => sum + source.includedCharCount, 0),
+      sources: debugSources,
+    };
+  };
+
   // Analyze profile with OpenAI
   const analyzeProfile = async () => {
     if (!profile.designer_name && !profile.style_description && !profile.custom_ergonomics_text) {
@@ -519,6 +579,7 @@ const DesignerProfilePage = () => {
 
     setAnalyzing(true);
     setAnalysisResult(null);
+    setAnalysisDebug(null);
 
     try {
       const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
@@ -533,8 +594,19 @@ const DesignerProfilePage = () => {
         sourceFiles.map(({ file, source }) => extractSourceFile(file, source)),
       );
 
+      const portfolioImagesTotal = uploadedFiles.filter((file) => !isTextExtractableFile(file)).length;
+      const portfolioImagesSent = Math.min(portfolioImagesTotal, 6);
+      setAnalysisDebug(buildAnalysisDebug(
+        extractedSources,
+        portfolioImagesTotal,
+        portfolioImagesSent,
+        portfolioDocumentFiles.length,
+        knowledgeFiles.length,
+        linkRefs.length,
+      ));
+
       const sourceSummary = [
-        `Изображения портфолио: ${uploadedFiles.filter((file) => !isTextExtractableFile(file)).length} загружено, ${Math.min(uploadedFiles.filter((file) => !isTextExtractableFile(file)).length, 6)} отправлено в vision.`,
+        `Изображения портфолио: ${portfolioImagesTotal} загружено, ${portfolioImagesSent} отправлено в vision.`,
         `Документы портфолио: ${portfolioDocumentFiles.map((file) => file.name).join(", ") || "нет"}.`,
         `Файлы базы знаний: ${knowledgeFiles.map((file) => file.name).join(", ") || "нет"}.`,
         `Pinterest/референсы: ${linkRefs.length > 0 ? linkRefs.join("; ") : "нет"}.`,
@@ -574,8 +646,10 @@ ${sourceSummary}${extractedSourcesBlock}`;
       text2 = formatAnalysisBlock('КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', text2);
 
       let validation = validateProfileAnalysis(text1, text2);
+      let retried = false;
 
       if (!validation.ok) {
+        retried = true;
         toast.info("AI вернул слишком короткий анализ, пробую расширить результат");
 
         const retryTasks: Promise<string>[] = [];
@@ -615,6 +689,15 @@ ${sourceSummary}${extractedSourcesBlock}`;
 
         validation = validateProfileAnalysis(text1, text2);
       }
+
+      setAnalysisDebug((prev) => prev ? ({
+        ...prev,
+        validation: {
+          sentenceCount: validation.sentenceCount,
+          actionCount: validation.actionCount,
+          retried,
+        },
+      }) : prev);
 
       if (!validation.ok) {
         throw new Error(`AI вернул слишком короткий анализ: ${validation.issues.join("; ")}`);
@@ -902,6 +985,73 @@ ${sourceSummary}${extractedSourcesBlock}`;
                 <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
                 <div className="h-4 bg-muted rounded animate-pulse w-full" />
                 <div className="h-4 bg-muted rounded animate-pulse w-5/6" />
+              </div>
+            )}
+
+            {analysisDebug && (
+              <div className="bg-white border border-[#E5E5E5] rounded-xl p-5 shadow-sm space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-[16px] font-semibold text-[#2D2D2D]">Источники анализа</h3>
+                    <p className="text-[13px] text-muted-foreground mt-1">
+                      Проверка того, какие материалы реально попали в AI.
+                    </p>
+                  </div>
+                  {analysisDebug.validation && (
+                    <div className="text-right text-[12px] text-muted-foreground">
+                      <div>{analysisDebug.validation.sentenceCount}/10 предложений</div>
+                      <div>{analysisDebug.validation.actionCount}/10 пунктов</div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-[13px] text-[#2D2D2D]">
+                  <div className="bg-muted/40 rounded-lg px-3 py-2">
+                    Изображения: {analysisDebug.portfolioImagesSent}/{analysisDebug.portfolioImagesTotal} в vision
+                  </div>
+                  <div className="bg-muted/40 rounded-lg px-3 py-2">
+                    Текст: {analysisDebug.promptTextIncluded}/{analysisDebug.promptTextBudget} символов
+                  </div>
+                  <div className="bg-muted/40 rounded-lg px-3 py-2">
+                    PDF/документы портфолио: {analysisDebug.portfolioDocumentsTotal}
+                  </div>
+                  <div className="bg-muted/40 rounded-lg px-3 py-2">
+                    База знаний: {analysisDebug.knowledgeFilesTotal}
+                  </div>
+                </div>
+
+                {analysisDebug.sources.length > 0 ? (
+                  <div className="space-y-2">
+                    {analysisDebug.sources.map((source) => (
+                      <div key={`${source.source}-${source.name}`} className="border border-[#E5E5E5] rounded-lg px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[13px] font-medium text-[#2D2D2D] truncate">{source.name}</span>
+                          <span className="text-[11px] text-muted-foreground flex-shrink-0">{source.source}</span>
+                        </div>
+                        <div className="text-[12px] text-muted-foreground mt-1">
+                          {source.note}; извлечено {source.originalCharCount}, включено {source.includedCharCount}
+                          {source.truncated ? "; сокращено" : ""}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[13px] text-muted-foreground">
+                    Текстовые файлы не найдены. Анализ опирается на поля профиля и изображения портфолио.
+                  </p>
+                )}
+
+                {analysisDebug.pinterestLinksTotal > 0 && (
+                  <p className="text-[12px] text-muted-foreground">
+                    Pinterest-ссылки переданы как URL: {analysisDebug.pinterestLinksTotal}. Их содержимое пока не извлекается автоматически.
+                  </p>
+                )}
+
+                {analysisDebug.validation?.retried && (
+                  <p className="text-[12px] text-muted-foreground">
+                    Первый ответ был коротким, поэтому система автоматически запросила расширенную версию.
+                  </p>
+                )}
               </div>
             )}
 
