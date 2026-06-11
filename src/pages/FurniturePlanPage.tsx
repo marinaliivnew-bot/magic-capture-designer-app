@@ -13,6 +13,7 @@ import ProjectHeader from "@/components/ProjectHeader";
 import ProjectStepNav from "@/components/ProjectStepNav";
 import ProcurementModal from "@/components/ProcurementModal";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   type FurnitureItem,
   type FurniturePlan,
@@ -312,23 +313,18 @@ ${itemsList}
 
 Отвечай на русском, кратко и профессионально.`;
 
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-5",
-          max_tokens: 600,
-          messages: [{ role: "user", content: prompt }],
-        }),
+      const { data, error } = await supabase.functions.invoke("estimate-furniture", {
+        body: { prompt },
       });
-      const data = await resp.json();
-      const text = data.content?.[0]?.text || "Не удалось получить ответ";
+      if (error) {
+        console.error("estimate-furniture invoke error:", error);
+        toast.error("Не удалось получить оценку AI. Попробуйте ещё раз.");
+        return;
+      }
+      const text = data?.text || "Не удалось получить ответ";
       setAiEstimate(text);
-    } catch {
+    } catch (e) {
+      console.error("handleAiEstimate error:", e);
       toast.error("Ошибка при обращении к AI");
     } finally {
       setEstimating(false);
