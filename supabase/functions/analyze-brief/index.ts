@@ -63,10 +63,9 @@ serve(async (req) => {
       ? `\n\n## Пользовательские референсы\nПользователь загрузил свои референсы. Учитывай это при формировании style_likes.\n${userRefs.map((r: { url: string; step?: string }) => `- [${r.step || "ref"}] ${r.url}`).join("\n")}`
       : "";
 
-    const knownFacts = [
-      briefText.includes('users') ? `Пользователи: уже описаны в брифе` : null,
-      projectContext ? `Контекст: ${projectContext}` : null,
-    ].filter(Boolean).join('\n');
+    const knownFacts = projectContext
+      ? `ДАННЫЕ О ПОМЕЩЕНИЯХ И ПРОЕКТЕ (уже известны — вопросы по этим пунктам НЕ задавать):\n${projectContext}`
+      : "";
 
     const designerBlock = designerProfileText
       ? `## СТАНДАРТЫ ДИЗАЙНЕРА — учитывать при поиске противоречий:\n${designerProfileText}\n\n`
@@ -76,7 +75,7 @@ serve(async (req) => {
 ${knownFacts || 'Нет данных'}
 
 Полный бриф (для поиска пустых мест и противоречий):
-${briefText}${refsBlock}`;
+${briefText}${projectContext ? `\n\n${projectContext}` : ''}${refsBlock}`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
