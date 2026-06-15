@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Loader2, Save, ArrowLeft, Upload, FileText, Trash2, Sparkles } from "lucide-react";
 import { getDesignerProfile, upsertDesignerProfile, type DesignerProfile } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
+import { getSessionId } from "@/lib/session";
 
 // Slider configurations for visual language
 const VISUAL_SLIDERS = [
@@ -68,14 +69,6 @@ const EXTRACTED_SOURCE_TEXT_BUDGET = 45_000;
 const MAX_PDF_PAGES_FOR_FILE_INPUT = 80;
 const MAX_PDF_BYTES_FOR_FILE_INPUT = 10 * 1024 * 1024;
 
-const getSessionId = () => {
-  let id = localStorage.getItem("designer_session_id");
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem("designer_session_id", id);
-  }
-  return id;
-};
 
 const DesignerProfilePage = () => {
   const navigate = useNavigate();
