@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getProjects, getBrief, getDesignerProfile } from "@/lib/api";
+import { getProjects, getBrief, getDesignerProfile, deleteProject } from "@/lib/api";
 import { getSessionId } from "@/lib/session";
 import { Button } from "@/components/ui/button";
-import { Loader as Loader2 } from "lucide-react";
+import { Loader as Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getProgressTextColor } from "@/components/ui/progress";
 
@@ -12,6 +12,7 @@ const Index = () => {
   const [projects, setProjects] = useState<any[]>([]);
   const [hasDesignerProfile, setHasDesignerProfile] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const loadProjects = async () => {
     try {
@@ -53,6 +54,18 @@ const Index = () => {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (deleteConfirmId !== id) { setDeleteConfirmId(id); return; }
+    setDeleteConfirmId(null);
+    try {
+      await deleteProject(id);
+      setProjects(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -338,9 +351,28 @@ const Index = () => {
                         {completeness}% заполнен
                       </p>
                     </div>
-                    <button className="font-body text-[13px] uppercase tracking-[0.1em] text-primary hover:text-foreground transition-colors duration-350 mt-4">
-                      Открыть →
-                    </button>
+                    <div className="flex items-center justify-between mt-4">
+                      <button className="font-body text-[13px] uppercase tracking-[0.1em] text-primary hover:text-foreground transition-colors duration-350">
+                        Открыть →
+                      </button>
+                      {deleteConfirmId === p.id ? (
+                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                          <button onClick={e => handleDelete(e, p.id)}
+                            className="font-body text-[10px] uppercase tracking-[0.08em] text-red-600 hover:text-red-800 transition-colors">
+                            Удалить
+                          </button>
+                          <span className="text-[#C8C0B8]">/</span>
+                          <button onClick={e => { e.stopPropagation(); setDeleteConfirmId(null); }}
+                            className="font-body text-[10px] uppercase tracking-[0.08em] text-[#8A8278] hover:text-foreground transition-colors">
+                            Отмена
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={e => handleDelete(e, p.id)} title="Удалить проект">
+                          <Trash2 className="h-3.5 w-3.5 text-[#C8C0B8] hover:text-red-500 transition-colors" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
