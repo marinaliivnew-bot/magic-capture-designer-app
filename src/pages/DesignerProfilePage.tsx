@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
-import { Loader2, Save, ArrowLeft, Plus, X, Upload, FileText, Trash2, Sparkles } from "lucide-react";
+import { Loader2, Save, ArrowLeft, Upload, FileText, Trash2, Sparkles } from "lucide-react";
 import { getDesignerProfile, upsertDesignerProfile, type DesignerProfile } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -32,33 +32,41 @@ interface ExtractedSource {
   truncated?: boolean;
   originalCharCount?: number;
   includedCharCount: number;
+  pageCount?: number | null;
+  fileSizeBytes?: number | null;
   note?: string;
 }
 
 interface AnalysisDebug {
   portfolioImagesTotal: number;
   portfolioImagesSent: number;
+  pdfFilesSentToVision: number;
   portfolioDocumentsTotal: number;
   knowledgeFilesTotal: number;
-  pinterestLinksTotal: number;
   promptTextBudget: number;
   promptTextIncluded: number;
   validation?: {
     sentenceCount: number;
     actionCount: number;
     retried: boolean;
+    qualityIssues: string[];
   };
+  warnings: string[];
   sources: Array<{
     name: string;
     source: ExtractedSource["source"];
     note: string;
     originalCharCount: number;
     includedCharCount: number;
+    pageCount?: number | null;
+    fileSizeBytes?: number | null;
     truncated: boolean;
   }>;
 }
 
 const EXTRACTED_SOURCE_TEXT_BUDGET = 45_000;
+const MAX_PDF_PAGES_FOR_FILE_INPUT = 80;
+const MAX_PDF_BYTES_FOR_FILE_INPUT = 10 * 1024 * 1024;
 
 const getSessionId = () => {
   let id = localStorage.getItem("designer_session_id");
@@ -93,7 +101,6 @@ const DesignerProfilePage = () => {
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [knowledgeFiles, setKnowledgeFiles] = useState<UploadedFile[]>([]);
-  const [newRef, setNewRef] = useState("");
   const [kbDragActive, setKbDragActive] = useState(false);
 
   useEffect(() => {
@@ -139,7 +146,7 @@ const DesignerProfilePage = () => {
         } else {
           // Fallback: categorize by extension
           const ext = file.name.toLowerCase();
-          if (ext.endsWith('.pdf') || ext.endsWith('.doc') || ext.endsWith('.docx') || ext.endsWith('.txt')) {
+          if (ext.endsWith('.pdf') || ext.endsWith('.docx') || ext.endsWith('.txt')) {
             kbFiles.push(uploadedFile);
           } else {
             portfolioFiles.push(uploadedFile);
@@ -196,13 +203,12 @@ const DesignerProfilePage = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Combine portfolio files, knowledge files and link references
+      // Store only files that are actually available to analysis.
       const portfolioPaths = uploadedFiles.map(f => f.path);
       const kbPaths = knowledgeFiles.map(f => f.path);
-      const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
       await upsertDesignerProfile({
         ...profile,
-        style_refs: [...portfolioPaths, ...kbPaths, ...linkRefs],
+        style_refs: [...portfolioPaths, ...kbPaths],
       });
       toast.success("Профиль сохранен");
     } catch (e) {
@@ -308,7 +314,7 @@ const DesignerProfilePage = () => {
     toast.success("Файл удалён");
   };
 
-  // Knowledge base files upload (PDF, DOC, TXT)
+  // Knowledge base files upload (PDF, DOCX, TXT)
   const [kbUploading, setKbUploading] = useState(false);
 
   const handleKbDrag = useCallback((e: React.DragEvent) => {
@@ -324,14 +330,14 @@ const DesignerProfilePage = () => {
   const uploadKnowledgeFiles = async (files: File[]) => {
     const validTypes = [
       "application/pdf",
-      "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "text/plain"
+      "text/plain",
+      "text/markdown",
     ];
     const validFiles = files.filter(f => validTypes.includes(f.type));
 
     if (validFiles.length === 0) {
-      toast.error("Поддерживаются только PDF, DOC, DOCX и TXT");
+      toast.error("Поддерживаются только PDF, DOCX и TXT");
       return;
     }
 
@@ -388,22 +394,6 @@ const DesignerProfilePage = () => {
     toast.success("Файл удалён");
   };
 
-  const addRef = () => {
-    if (!newRef.trim()) return;
-    setProfile((prev) => ({
-      ...prev,
-      style_refs: [...(prev.style_refs || []), newRef.trim()],
-    }));
-    setNewRef("");
-  };
-
-  const removeRef = (ref: string) => {
-    setProfile((prev) => ({
-      ...prev,
-      style_refs: (prev.style_refs || []).filter((r) => r !== ref),
-    }));
-  };
-
   const stripAnalysisHeader = (text: string, header: string) => {
     return text
       .replace(/\*\*/g, '')
@@ -437,19 +427,34 @@ const DesignerProfilePage = () => {
   const countActionItems = (text: string) => {
     const cleaned = cleanAnalysisContent(stripAnalysisHeader(text, 'КАК Я БУДУ ЭТО ПРИМЕНЯТЬ'));
 
-    return cleaned
+    const lineItems = cleaned
       .split('\n')
       .map((line) => line.replace(/^[-—•]\s*/, '').replace(/^\d+[.)]\s*/, '').trim())
       .filter((line) => (
         line.length >= 35 &&
         !/^(как я буду это применять|секция|пункт|хочу уточнить)/i.test(line)
-      )).length;
+      ));
+
+    if (lineItems.length >= 2) {
+      return lineItems.length;
+    }
+
+    return cleaned
+      .replace(/\s+/g, ' ')
+      .split(/(?=\s*(?:\d+[.)]\s+|[-—•]\s+|В брифе\b|В concept[- ]?board\b|В концепт[- ]?борде\b|Из референсов\b|При конфликте\b|В генерации\b|Для борда\b))/i)
+      .map((item) => item.replace(/^[-—•]\s*/, '').replace(/^\d+[.)]\s*/, '').trim())
+      .filter((item) => item.length >= 35).length;
   };
 
-  const validateProfileAnalysis = (whatISee: string, howIApply: string) => {
+  const countMatches = (text: string, patterns: RegExp[]) => {
+    return patterns.reduce((count, pattern) => count + (pattern.test(text) ? 1 : 0), 0);
+  };
+
+  const validateProfileAnalysis = (whatISee: string, howIApply: string, sources: ExtractedSource[] = []) => {
     const sentenceCount = countExpandedSentences(whatISee);
     const actionCount = countActionItems(howIApply);
     const issues: string[] = [];
+    const qualityIssues: string[] = [];
 
     if (sentenceCount < 10) {
       issues.push(`блок "Что я вижу" слишком короткий: ${sentenceCount}/10 развёрнутых предложений`);
@@ -458,18 +463,78 @@ const DesignerProfilePage = () => {
       issues.push(`блок "Как я буду это применять" слишком короткий: ${actionCount}/10 пунктов`);
     }
 
-    return { ok: issues.length === 0, issues, sentenceCount, actionCount };
+    const combined = `${whatISee}\n${howIApply}`.toLowerCase();
+    const materialSignals = countMatches(combined, [
+      /дерев|шпон|кам[её]н|мрамор|травертин|бетон|металл|латун|стекл|текстил|лен|кож|керамик|штукатур|микроцемент/,
+      /материал|фактур|тактиль|поверхност/,
+    ]);
+    const colorSignals = countMatches(combined, [
+      /беж|молоч|песоч|сер|графит|корич|терракот|олив|зел[её]н|син|голуб|ч[её]рн|бел|тепл|холод/,
+      /палитр|цвет|оттен/,
+    ]);
+    const compositionSignals = countMatches(combined, [
+      /компози|симметр|асимметр|ритм|масштаб|пропорц|вертикал|горизонтал|акцент|плоскост|слой|воздух/,
+      /зонирован|сценари|планиров|баланс/,
+    ]);
+    const processSignals = countMatches(howIApply.toLowerCase(), [
+      /бриф|клиент|анкета|сценари/,
+      /concept[- ]?board|концепт[- ]?борд|мудборд|борд/,
+      /референс|исключу|отсеку|фильтр/,
+      /генерац|промпт|визуализац/,
+    ]);
+
+    if (materialSignals < 2) {
+      qualityIssues.push("мало конкретных материалов/фактур");
+    }
+    if (colorSignals < 2) {
+      qualityIssues.push("мало конкретики по цветам/палитре");
+    }
+    if (compositionSignals < 2) {
+      qualityIssues.push("мало композиционных принципов");
+    }
+    if (processSignals < 3) {
+      qualityIssues.push("в практическом блоке мало действий для брифа, бордов, референсов или генерации");
+    }
+
+    const readableSources = sources.filter((source) => (
+      (source.originalCharCount ?? source.text.length) >= 1000 &&
+      !/без доступного текстового слоя|недоступен|ошибка/i.test(source.note || "")
+    ));
+    if (readableSources.length > 0) {
+      const mentionsSource = readableSources.some((source) => {
+        const lowerName = source.file.name.toLowerCase();
+        const stem = lowerName.replace(/\.[^.]+$/, "");
+        return combined.includes(lowerName) || (stem.length >= 8 && combined.includes(stem));
+      });
+      if (!mentionsSource) {
+        qualityIssues.push("нет ссылки на прочитанный файл-источник");
+      }
+    }
+
+    return {
+      ok: issues.length === 0 && qualityIssues.length === 0,
+      issues: [...issues, ...qualityIssues],
+      sentenceCount,
+      actionCount,
+      qualityIssues,
+    };
   };
 
-  const invokeProfileAnalysis = async (systemPrompt: string, userPrompt: string, imageUrls?: string[]) => {
+  const invokeProfileAnalysis = async (
+    systemPrompt: string,
+    userPrompt: string,
+    imageUrls?: string[],
+    pdfFiles?: Pick<UploadedFile, "path" | "name">[],
+  ) => {
     const { data, error } = await supabase.functions.invoke('analyze-profile', {
-      body: { systemPrompt, userPrompt, imageUrls },
+      body: { systemPrompt, userPrompt, imageUrls, pdfFiles },
     });
 
     const text = data?.text || "";
     if (error || !text.trim()) {
       const detail = data?.details ? ` (${String(data.details).slice(0, 200)})` : "";
-      throw new Error(error?.message || data?.error || `Нет ответа от AI${detail}`);
+      const message = error?.message || data?.error || "Нет ответа от AI";
+      throw new Error(`${message}${detail}`);
     }
 
     return text.trim();
@@ -478,7 +543,17 @@ const DesignerProfilePage = () => {
   const isTextExtractableFile = (file: UploadedFile) => {
     const lowerName = file.name.toLowerCase();
     const lowerPath = file.path.toLowerCase();
-    return [".pdf", ".txt", ".doc", ".docx"].some((ext) => lowerName.endsWith(ext) || lowerPath.endsWith(ext));
+    return [".pdf", ".txt", ".md", ".docx"].some((ext) => lowerName.endsWith(ext) || lowerPath.endsWith(ext));
+  };
+
+  const isPdfFile = (file: UploadedFile) => {
+    const lowerName = file.name.toLowerCase();
+    const lowerPath = file.path.toLowerCase();
+    return lowerName.endsWith(".pdf") || lowerPath.endsWith(".pdf");
+  };
+
+  const isUnreadablePdfSource = (source: ExtractedSource) => {
+    return isPdfFile(source.file) && /pdf без доступного текстового слоя|текст недоступен|ошибка/i.test(source.note || source.text);
   };
 
   const extractSourceFile = async (
@@ -498,6 +573,8 @@ const DesignerProfilePage = () => {
         truncated: Boolean(data?.truncated),
         originalCharCount: typeof data?.originalCharCount === "number" ? data.originalCharCount : text.length,
         includedCharCount: text.length,
+        pageCount: typeof data?.pageCount === "number" ? data.pageCount : null,
+        fileSizeBytes: typeof data?.fileSizeBytes === "number" ? data.fileSizeBytes : null,
         note: error ? "ошибка извлечения" : data?.note,
       };
     } catch {
@@ -506,6 +583,8 @@ const DesignerProfilePage = () => {
         source,
         text: "ошибка чтения",
         includedCharCount: 0,
+        pageCount: null,
+        fileSizeBytes: null,
         note: "ошибка чтения",
       };
     }
@@ -538,9 +617,9 @@ const DesignerProfilePage = () => {
     sources: ExtractedSource[],
     portfolioImagesTotal: number,
     portfolioImagesSent: number,
+    pdfFilesSentToVision: number,
     portfolioDocumentsTotal: number,
     knowledgeFilesTotal: number,
-    pinterestLinksTotal: number,
   ): AnalysisDebug => {
     let remaining = EXTRACTED_SOURCE_TEXT_BUDGET;
     const debugSources = sources.map((source) => {
@@ -554,18 +633,47 @@ const DesignerProfilePage = () => {
         note: source.note || "текст извлечён",
         originalCharCount: source.originalCharCount ?? sourceTextLength,
         includedCharCount,
+        pageCount: source.pageCount ?? null,
+        fileSizeBytes: source.fileSizeBytes ?? null,
         truncated: Boolean(source.truncated || sourceTextLength > includedCharCount),
       };
     });
+    const warnings: string[] = [];
+    const unreadablePdfSources = debugSources.filter((source) => /pdf без доступного текстового слоя/i.test(source.note));
+    const unreadablePdfCount = unreadablePdfSources.length;
+    if (unreadablePdfCount > 0) {
+      warnings.push(`PDF без текстового слоя: ${unreadablePdfCount}. Система попробует проанализировать их как визуальные PDF.`);
+    }
+    const oversizedVisualPdfs = unreadablePdfSources.filter((source) => (
+      (typeof source.pageCount === "number" && source.pageCount > MAX_PDF_PAGES_FOR_FILE_INPUT)
+      || (typeof source.fileSizeBytes === "number" && source.fileSizeBytes > MAX_PDF_BYTES_FOR_FILE_INPUT)
+    ));
+    if (oversizedVisualPdfs.length > 0) {
+      warnings.push(`Большие PDF не будут отправлены целиком в AI: ${oversizedVisualPdfs.map((source) => {
+        const details = [
+          source.pageCount ? `${source.pageCount} стр.` : "",
+          source.fileSizeBytes ? `${(source.fileSizeBytes / 1024 / 1024).toFixed(1)} МБ` : "",
+        ].filter(Boolean).join(", ");
+        return `${source.name}${details ? ` (${details})` : ""}`;
+      }).join(", ")}. Разбейте файл на главы до ${MAX_PDF_PAGES_FOR_FILE_INPUT} страниц или загрузите DOCX/TXT.`);
+    }
+
+    const includedKnowledgeChars = debugSources
+      .filter((source) => source.source === "База знаний")
+      .reduce((sum, source) => sum + source.includedCharCount, 0);
+    if (knowledgeFilesTotal > 0 && includedKnowledgeChars < 1000) {
+      warnings.push("Из базы знаний включено меньше 1000 символов. Лучше загрузить DOCX или PDF с текстовым слоем.");
+    }
 
     return {
       portfolioImagesTotal,
       portfolioImagesSent,
+      pdfFilesSentToVision,
       portfolioDocumentsTotal,
       knowledgeFilesTotal,
-      pinterestLinksTotal,
       promptTextBudget: EXTRACTED_SOURCE_TEXT_BUDGET,
       promptTextIncluded: debugSources.reduce((sum, source) => sum + source.includedCharCount, 0),
+      warnings,
       sources: debugSources,
     };
   };
@@ -582,8 +690,6 @@ const DesignerProfilePage = () => {
     setAnalysisDebug(null);
 
     try {
-      const linkRefs = profile.style_refs?.filter((ref: string) => ref.startsWith("http")) || [];
-
       const portfolioDocumentFiles = uploadedFiles.filter(isTextExtractableFile);
       const sourceFiles = [
         ...portfolioDocumentFiles.map((file) => ({ file, source: "Портфолио" as const })),
@@ -593,6 +699,15 @@ const DesignerProfilePage = () => {
       const extractedSources = await Promise.all(
         sourceFiles.map(({ file, source }) => extractSourceFile(file, source)),
       );
+      const unreadablePdfSources = extractedSources.filter(isUnreadablePdfSource);
+      const oversizedVisualPdfSources = unreadablePdfSources.filter((source) => (
+        (typeof source.pageCount === "number" && source.pageCount > MAX_PDF_PAGES_FOR_FILE_INPUT)
+        || (typeof source.fileSizeBytes === "number" && source.fileSizeBytes > MAX_PDF_BYTES_FOR_FILE_INPUT)
+      ));
+      const visualPdfFiles = unreadablePdfSources
+        .filter((source) => !oversizedVisualPdfSources.includes(source))
+        .slice(0, 2)
+        .map((source) => ({ path: source.file.path, name: source.file.name }));
 
       const portfolioImagesTotal = uploadedFiles.filter((file) => !isTextExtractableFile(file)).length;
       const portfolioImagesSent = Math.min(portfolioImagesTotal, 6);
@@ -600,22 +715,21 @@ const DesignerProfilePage = () => {
         extractedSources,
         portfolioImagesTotal,
         portfolioImagesSent,
+        visualPdfFiles.length,
         portfolioDocumentFiles.length,
         knowledgeFiles.length,
-        linkRefs.length,
       ));
 
       const sourceSummary = [
         `Изображения портфолио: ${portfolioImagesTotal} загружено, ${portfolioImagesSent} отправлено в vision.`,
+        `PDF без текстового слоя: ${visualPdfFiles.length} отправлено как PDF-файл в vision/file input; ${oversizedVisualPdfSources.length} слишком больших PDF пропущено.`,
         `Документы портфолио: ${portfolioDocumentFiles.map((file) => file.name).join(", ") || "нет"}.`,
         `Файлы базы знаний: ${knowledgeFiles.map((file) => file.name).join(", ") || "нет"}.`,
-        `Pinterest/референсы: ${linkRefs.length > 0 ? linkRefs.join("; ") : "нет"}.`,
       ].join("\n");
 
       const extractedSourcesBlock = buildExtractedSourcesBlock(extractedSources);
 
-      // TWO parallel AI calls — one per block — to bypass max_tokens limit
-      const baseUserPrompt = `Имя: ${profile.designer_name || "Не указано"}
+      const baseContextPrompt = `Имя: ${profile.designer_name || "Не указано"}
 Описание стиля: ${profile.style_description || "Не заполнено"}
 Визуальный язык (шкалы 1-10): ${Object.entries(profile.ergonomics_rules || {}).map(([k,v]) => `${k}: ${v}`).join(', ')}
 Стандарты и ограничения: ${profile.custom_ergonomics_text || "Не заполнено"}
@@ -628,15 +742,58 @@ ${sourceSummary}${extractedSourcesBlock}`;
         .slice(0, 6)
         .map(f => f.url);
 
+      const digestPrompt = `Ты — аналитик дизайн-системы студии. Сначала сделай SOURCE DIGEST по профилю, файлам и изображениям. Ответь на русском, только структурированной выжимкой без вступления.
+
+Разделы:
+- Палитры и цвета: конкретные оттенки, температура, насыщенность.
+- Материалы и фактуры: только наблюдаемые или явно названные материалы.
+- Формы и композиция: ритм, пропорции, сетка, плотность, акценты.
+- Повторяющиеся приёмы портфолио: что видно в проектах/мудбордах.
+- Запреты и отсечения: что дизайнер избегает.
+- Клиентский процесс: как это влияет на бриф, согласование, конфликт с пожеланиями клиента.
+- Источники и уверенность: по каждому файлу/изображениям укажи, насколько источник реально прочитан или виден.
+
+Если PDF не дал текст, так и напиши: "источник не прочитан как текст"; не выдумывай содержание файла по имени.`;
+
+      if (oversizedVisualPdfSources.length > 0) {
+        throw new Error(`PDF слишком большой для анализа целиком: ${oversizedVisualPdfSources.map((source) => source.file.name).join(", ")}. Разбейте его на главы до ${MAX_PDF_PAGES_FOR_FILE_INPUT} страниц или загрузите DOCX/TXT.`);
+      }
+
+      let sourceDigest = "";
+      try {
+        sourceDigest = await invokeProfileAnalysis(digestPrompt, baseContextPrompt, portfolioImageUrls, visualPdfFiles);
+      } catch (pdfInputError) {
+        console.warn("PDF file input failed:", pdfInputError);
+        const pdfErrorMessage = pdfInputError instanceof Error ? pdfInputError.message : String(pdfInputError);
+        const contextLimitExceeded = /context window|exceeds the context/i.test(pdfErrorMessage);
+        const userMessage = contextLimitExceeded
+          ? `PDF слишком большой для анализа целиком. Разбейте его на главы до ${MAX_PDF_PAGES_FOR_FILE_INPUT} страниц или загрузите DOCX/TXT.`
+          : "PDF не удалось передать в AI. Попробуйте сохранить его заново или загрузить DOCX/TXT.";
+        setAnalysisDebug((prev) => prev ? ({
+          ...prev,
+          pdfFilesSentToVision: 0,
+          warnings: [
+            ...prev.warnings,
+            `${userMessage} Анализ остановлен, чтобы не показывать неполный результат как полноценный.`,
+          ],
+        }) : prev);
+        throw new Error(userMessage);
+      }
+      const baseUserPrompt = `${baseContextPrompt}
+
+SOURCE DIGEST:
+${sourceDigest}`;
+
+      // TWO parallel AI calls — one per block — to bypass max_tokens limit
       // Block 1 prompt: "ЧТО Я ВИЖУ"
       const promptBlock1 = `Ты — куратор дизайн-студии. Проанализируй стиль дизайнера по данным профиля. Если есть "БАЗА ЗНАНИЙ ДИЗАЙНЕРА" — прочитай полностью и цитируй. ОТВЕЧАЙ НА РУССКОМ, ТОЛЬКО текст секции.
 
-Напиши "ЧТО Я ВИЖУ" — ровно 15 развёрнутых предложений о стиле дизайнера. Каждое предложение — новая конкретная мысль. Объясняй КАК ИМЕННО и ПОЧЕМУ, избегай общих фраз. Разбери: общую эстетику, цвета и оттенки, материалы и фактуры, приёмы из портфолио, стандарты и принципы, подход к клиенту, итоговую характеристику. Если вывод основан на файле, упоминай источник по имени файла. Если Pinterest-ссылка не прочитана как изображение, не делай вид, что видел её содержимое. Не пиши "Хочу уточнить" и не задавай вопросы.`;
+Напиши "ЧТО Я ВИЖУ" — ровно 15 развёрнутых предложений о стиле дизайнера. Каждое предложение — новая конкретная мысль. Обязательно используй SOURCE DIGEST: назови минимум 2 материала/фактуры, 2 цвета или палитры, 2 композиционных принципа и 1 вывод про клиентский процесс. Объясняй КАК ИМЕННО и ПОЧЕМУ, избегай общих фраз. Разбери: общую эстетику, цвета и оттенки, материалы и фактуры, приёмы из портфолио, стандарты и принципы, подход к клиенту, итоговую характеристику. Если вывод основан на прочитанном файле, упоминай источник по имени файла. Если источник не прочитан как текст, не выдумывай его содержание. Не пиши "Хочу уточнить" и не задавай вопросы.`;
 
       // Block 2 prompt: "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ"
       const promptBlock2 = `Ты — куратор дизайн-студии. На основе профиля дизайнера напиши практические рекомендации. ОТВЕЧАЙ НА РУССКОМ, ТОЛЬКО текст секции.
 
-Напиши "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ" — ровно 15 конкретных пунктов-действий. Каждый с новой строки, без нумерации. По 3 пункта на шкалу: температура (цвета), строгость (компоновка), фактурность (материалы), цветность (палитра), стиль (направленность). Формулируй как прямые действия: "Исключу...", "Буду отдавать предпочтение...". Опирай действия на профиль, извлечённые документы и видимые изображения портфолио; избегай универсальных советов, которые подошли бы любому дизайнеру. Не пиши "Хочу уточнить" и не задавай вопросы.`;
+Напиши "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ" — ровно 15 конкретных пунктов-действий. Каждый с новой строки, без нумерации. Это должен быть операционный стандарт, а не описание стиля: формулируй через действия "В брифе буду проверять...", "В concept-board зафиксирую...", "Из референсов исключу...", "При конфликте клиента с профилем предложу...", "В генерации борда укажу...". По 3 пункта на шкалу: температура (цвета), строгость (компоновка), фактурность (материалы), цветность (палитра), стиль (направленность). Опирай действия на SOURCE DIGEST, профиль, извлечённые документы и видимые изображения портфолио; избегай универсальных советов, которые подошли бы любому дизайнеру. Не пиши "Хочу уточнить" и не задавай вопросы.`;
 
       let [text1, text2] = await Promise.all([
         invokeProfileAnalysis(promptBlock1, baseUserPrompt, portfolioImageUrls),
@@ -645,7 +802,7 @@ ${sourceSummary}${extractedSourcesBlock}`;
       text1 = formatAnalysisBlock('ЧТО Я ВИЖУ', text1);
       text2 = formatAnalysisBlock('КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', text2);
 
-      let validation = validateProfileAnalysis(text1, text2);
+      let validation = validateProfileAnalysis(text1, text2, extractedSources);
       let retried = false;
 
       if (!validation.ok) {
@@ -654,24 +811,25 @@ ${sourceSummary}${extractedSourcesBlock}`;
 
         const retryTasks: Promise<string>[] = [];
         const retryTargets: Array<"whatISee" | "howIApply"> = [];
+        const retryQualityOnly = validation.sentenceCount >= 10 && validation.actionCount >= 10 && validation.qualityIssues.length > 0;
 
-        if (validation.sentenceCount < 10) {
+        if (validation.sentenceCount < 10 || retryQualityOnly) {
           retryTargets.push("whatISee");
           retryTasks.push(invokeProfileAnalysis(
             `${promptBlock1}
 
-Предыдущий ответ был слишком коротким. Перепиши секцию заново: минимум 10, лучше 15 развёрнутых предложений. Не сжимай мысли в один абзац, не обобщай, опирайся на все доступные поля профиля, базу знаний и портфолио. Верни только секцию "ЧТО Я ВИЖУ".`,
+Предыдущий ответ был слишком коротким или слишком общим. Перепиши секцию заново: минимум 10, лучше 15 развёрнутых предложений. Не сжимай мысли в один абзац, не обобщай, опирайся на SOURCE DIGEST, все доступные поля профиля, базу знаний и портфолио. Обязательно назови материалы, палитру, композиционные принципы, клиентский процесс и прочитанные источники, если они действительно прочитаны. Верни только секцию "ЧТО Я ВИЖУ".`,
             baseUserPrompt,
             portfolioImageUrls,
           ));
         }
 
-        if (validation.actionCount < 10) {
+        if (validation.actionCount < 10 || retryQualityOnly) {
           retryTargets.push("howIApply");
           retryTasks.push(invokeProfileAnalysis(
             `${promptBlock2}
 
-Предыдущий ответ был слишком коротким. Перепиши секцию заново: минимум 10, лучше 15 отдельных практических пунктов. Каждый пункт должен быть на новой строке и описывать конкретное действие для будущих брифов, концепт-бордов или проектных решений. Верни только секцию "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ".`,
+Предыдущий ответ был слишком коротким, слишком общим или плохо разделён на пункты. Перепиши секцию заново: верни ровно 15 строк, каждая строка начинается с "- " и содержит одно конкретное действие длиной минимум 35 символов. Обязательно используй форматы действий: "В брифе буду проверять...", "В concept-board зафиксирую...", "Из референсов исключу...", "При конфликте клиента с профилем предложу...", "В генерации борда укажу...". Не объединяй пункты в абзац. Верни только секцию "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ".`,
             baseUserPrompt,
             portfolioImageUrls,
           ));
@@ -687,7 +845,7 @@ ${sourceSummary}${extractedSourcesBlock}`;
           }
         });
 
-        validation = validateProfileAnalysis(text1, text2);
+        validation = validateProfileAnalysis(text1, text2, extractedSources);
       }
 
       setAnalysisDebug((prev) => prev ? ({
@@ -696,11 +854,23 @@ ${sourceSummary}${extractedSourcesBlock}`;
           sentenceCount: validation.sentenceCount,
           actionCount: validation.actionCount,
           retried,
+          qualityIssues: validation.qualityIssues,
         },
       }) : prev);
 
+      const hasUsableDraft = validation.sentenceCount >= 5 || validation.actionCount >= 5 || `${text1}\n${text2}`.length >= 1200;
       if (!validation.ok) {
-        throw new Error(`AI вернул слишком короткий анализ: ${validation.issues.join("; ")}`);
+        setAnalysisDebug((prev) => prev ? ({
+          ...prev,
+          warnings: [
+            ...prev.warnings,
+            `Анализ показан как черновик: ${validation.issues.join("; ")}.`,
+          ],
+        }) : prev);
+
+        if (!hasUsableDraft) {
+          throw new Error(`AI вернул слишком короткий анализ: ${validation.issues.join("; ")}`);
+        }
       }
 
       const analysisText = [text1, text2].filter(Boolean).join('\n\n');
@@ -718,7 +888,8 @@ ${sourceSummary}${extractedSourcesBlock}`;
 
       toast.success("Анализ сохранён");
     } catch (e) {
-      toast.error("Ошибка анализа профиля");
+      const message = e instanceof Error ? e.message : "Ошибка анализа профиля";
+      toast.error(message);
       console.error(e);
     } finally {
       setAnalyzing(false);
@@ -866,36 +1037,6 @@ ${sourceSummary}${extractedSourcesBlock}`;
             )}
           </section>
 
-          {/* Block 4 — Reference Links */}
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Ссылки на референсы</h2>
-            <div className="flex gap-2">
-              <Input
-                placeholder="https://pinterest.com/..."
-                value={newRef}
-                onChange={(e) => setNewRef(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addRef()}
-              />
-              <Button type="button" variant="outline" onClick={addRef}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(profile.style_refs || [])
-                .filter((ref: string) => ref.startsWith("http"))
-                .map((ref: string) => (
-                  <div key={ref} className="flex items-center gap-1 bg-muted px-3 py-1 rounded-full text-sm">
-                    <a href={ref} target="_blank" rel="noreferrer" className="truncate max-w-[200px]">
-                      {ref}
-                    </a>
-                    <button onClick={() => removeRef(ref)} className="text-muted-foreground hover:text-destructive">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-            </div>
-          </section>
-
           {/* Block 5 — Standards and Constraints */}
           <section className="space-y-3">
             <div>
@@ -928,7 +1069,7 @@ ${sourceSummary}${extractedSourcesBlock}`;
               <input
                 type="file"
                 multiple
-                accept=".pdf,.doc,.docx,.txt"
+                accept=".pdf,.docx,.txt"
                 onChange={handleKbFileInput}
                 className="hidden"
                 id="knowledge-upload"
@@ -936,7 +1077,7 @@ ${sourceSummary}${extractedSourcesBlock}`;
               <label htmlFor="knowledge-upload" className="cursor-pointer block">
                 <Upload className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
                 <p className="text-sm font-medium mb-1">Перетащите файлы сюда или кликните для выбора</p>
-                <p className="text-xs text-muted-foreground">PDF, DOC, DOCX, TXT до 20 МБ</p>
+                <p className="text-xs text-muted-foreground">PDF, DOCX, TXT до 20 МБ</p>
               </label>
               {kbUploading && (
                 <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -989,7 +1130,25 @@ ${sourceSummary}${extractedSourcesBlock}`;
             )}
 
             {analysisDebug && (
-              <div className="bg-white border border-[#E5E5E5] rounded-xl p-5 shadow-sm space-y-4">
+              <details className="bg-white border border-[#E5E5E5] rounded-xl p-5 shadow-sm space-y-4" open={analysisDebug.warnings.length > 0}>
+                <summary className="cursor-pointer list-none">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-[16px] font-semibold text-[#2D2D2D]">Источники учтены</h3>
+                      <p className="text-[13px] text-muted-foreground mt-1">
+                        {analysisDebug.sources.length} файлов, {analysisDebug.portfolioImagesSent}/{analysisDebug.portfolioImagesTotal} изображений в vision, {analysisDebug.pdfFilesSentToVision} PDF в file input
+                      </p>
+                    </div>
+                    {analysisDebug.validation && (
+                      <div className="text-right text-[12px] text-muted-foreground">
+                        <div>{analysisDebug.validation.sentenceCount}/10 предложений</div>
+                        <div>{analysisDebug.validation.actionCount}/10 пунктов</div>
+                      </div>
+                    )}
+                  </div>
+                </summary>
+
+                <div className="pt-4 space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-[16px] font-semibold text-[#2D2D2D]">Источники анализа</h3>
@@ -1005,9 +1164,22 @@ ${sourceSummary}${extractedSourcesBlock}`;
                   )}
                 </div>
 
+                {analysisDebug.warnings.length > 0 && (
+                  <div className="space-y-2">
+                    {analysisDebug.warnings.map((warning) => (
+                      <p key={warning} className="text-[12px] text-[#8A5A2B] bg-[#FFF7ED] border border-[#FED7AA] rounded-lg px-3 py-2">
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3 text-[13px] text-[#2D2D2D]">
                   <div className="bg-muted/40 rounded-lg px-3 py-2">
                     Изображения: {analysisDebug.portfolioImagesSent}/{analysisDebug.portfolioImagesTotal} в vision
+                  </div>
+                  <div className="bg-muted/40 rounded-lg px-3 py-2">
+                    PDF в AI: {analysisDebug.pdfFilesSentToVision} как file input
                   </div>
                   <div className="bg-muted/40 rounded-lg px-3 py-2">
                     Текст: {analysisDebug.promptTextIncluded}/{analysisDebug.promptTextBudget} символов
@@ -1041,18 +1213,18 @@ ${sourceSummary}${extractedSourcesBlock}`;
                   </p>
                 )}
 
-                {analysisDebug.pinterestLinksTotal > 0 && (
-                  <p className="text-[12px] text-muted-foreground">
-                    Pinterest-ссылки переданы как URL: {analysisDebug.pinterestLinksTotal}. Их содержимое пока не извлекается автоматически.
-                  </p>
-                )}
-
                 {analysisDebug.validation?.retried && (
                   <p className="text-[12px] text-muted-foreground">
-                    Первый ответ был коротким, поэтому система автоматически запросила расширенную версию.
+                    Первый ответ был коротким или слишком общим, поэтому система автоматически запросила расширенную версию.
                   </p>
                 )}
-              </div>
+                {analysisDebug.validation && analysisDebug.validation.qualityIssues.length > 0 && (
+                  <p className="text-[12px] text-muted-foreground">
+                    Контроль качества: {analysisDebug.validation.qualityIssues.join("; ")}.
+                  </p>
+                )}
+                </div>
+              </details>
             )}
 
             {/* Helper: extract section between two headers (case-insensitive, handles ** bold, em-dash separators) */}
@@ -1071,7 +1243,7 @@ ${sourceSummary}${extractedSourcesBlock}`;
 
                 const toRe = new RegExp(`(?:\\d+\\.\\s*)?${to}(?:\\s*[:—–]?\\s*)?`, 'i');
                 const endMatch = after.match(toRe);
-                let result = endMatch ? after.slice(0, endMatch.index!) : after;
+                const result = endMatch ? after.slice(0, endMatch.index!) : after;
                 return cleanup(result);
               };
 
@@ -1079,35 +1251,79 @@ ${sourceSummary}${extractedSourcesBlock}`;
                 return cleanAnalysisContent(s);
               };
 
+              const splitNumberedThoughts = (text: string) => {
+                const normalized = text.replace(/\s+/g, ' ').trim();
+                const numbered = normalized
+                  .split(/(?=\b\d{1,2}[.)]\s+)/)
+                  .map((item) => item.replace(/^\d{1,2}[.)]\s*/, '').trim())
+                  .filter((item) => item.length > 20);
+
+                if (numbered.length >= 3) return numbered;
+
+                return normalized
+                  .split(/(?<=[.!?…])\s+/)
+                  .map((item) => item.trim())
+                  .filter((item) => item.length > 20);
+              };
+
+              const splitActionItems = (text: string) => {
+                const lines = text
+                  .split('\n')
+                  .map((line) => line.trim())
+                  .filter((line) => line && line.length > 3);
+
+                const lineItems = lines
+                  .map((line) => line.replace(/^[-—•.]\s*/, '').replace(/^\d{1,2}[.)]\s*/, '').trim())
+                  .filter((line) => !/^(это\s+применять|применять|секция|пункт)/i.test(line));
+
+                if (lineItems.length >= 3) return lineItems;
+
+                return text
+                  .replace(/\s+/g, ' ')
+                  .split(/(?=\s*(?:\d{1,2}[.)]\s+|[-—•.]\s+|В брифе\b|В concept[- ]?board\b|В концепт[- ]?борде\b|Из референсов\b|При конфликте\b|В генерации\b|Для борда\b))/i)
+                  .map((item) => item.replace(/^[-—•.]\s*/, '').replace(/^\d{1,2}[.)]\s*/, '').trim())
+                  .filter((item) => item.length > 20);
+              };
+
               const whatISee = extractBetween(clean, 'ЧТО Я ВИЖУ', 'КАК Я БУДУ ЭТО ПРИМЕНЯТЬ');
               const howIApply = extractBetween(clean, 'КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', 'ХОЧУ УТОЧНИТЬ');
+              const whatISeeItems = splitNumberedThoughts(whatISee);
+              const howIApplyItems = splitActionItems(howIApply);
 
               return (
                 <div className="space-y-6">
                   {/* Section 1: What I See */}
                   <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
                     <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Что я вижу</h3>
-                    <div className="text-[15px] leading-relaxed text-[#2D2D2D]" style={{ color: '#2D2D2D' }}>
-                      {whatISee || '(нет данных)'}
-                    </div>
+                    {whatISeeItems.length > 0 ? (
+                      <ol className="space-y-3 text-[15px] leading-relaxed text-[#2D2D2D]">
+                        {whatISeeItems.map((item, i) => (
+                          <li key={i} className="grid grid-cols-[28px_1fr] gap-3">
+                            <span className="text-[13px] text-muted-foreground pt-0.5">{i + 1}.</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="text-muted-foreground italic">(нет данных)</p>
+                    )}
                   </div>
 
                   {/* Section 2: How I'll Apply */}
                   <div className="bg-white border border-[#E5E5E5] rounded-xl p-6 shadow-sm">
                     <h3 className="text-[18px] font-semibold text-[#2D2D2D] mb-4">Как я буду это применять</h3>
-                    <div className="text-[15px] leading-relaxed text-[#2D2D2D] space-y-2" style={{ color: '#2D2D2D' }}>
-                      {(() => {
-                        const lines = howIApply.split('\n')
-                          .map(l => l.trim())
-                          .filter(l => l && l.length > 3 && !/^(это\s+применять|применять|секция|пункт)/i.test(l));
-                        return lines.length > 0 ? lines.map((line, i) => (
-                          <p key={i} className="flex items-start gap-2">
-                            <span className="text-primary mt-1">•</span>
-                            <span>{line.replace(/^[-—•]\s*/, '').replace(/^\d+[.)]\s*/, '').trim()}</span>
+                    {howIApplyItems.length > 0 ? (
+                      <div className="space-y-2 text-[15px] leading-relaxed text-[#2D2D2D]">
+                        {howIApplyItems.map((item, i) => (
+                          <p key={i} className="grid grid-cols-[18px_1fr] gap-3">
+                            <span className="text-primary pt-0.5">•</span>
+                            <span>{item}</span>
                           </p>
-                        )) : <p className="text-muted-foreground italic">(нет данных)</p>;
-                      })()}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground italic">(нет данных)</p>
+                    )}
                   </div>
                 </div>
               );
