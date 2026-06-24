@@ -510,7 +510,7 @@ const EditProject = () => {
             <div>
               <Label className="text-base font-semibold">В. Описание текстом</Label>
             </div>
-            <Textarea placeholder="Баня 10x6, внутри парилка, душевая, комната отдыха и тамбур..." className="min-h-[100px]" value={form.rooms_description} onChange={(event) => set("rooms_description", event.target.value)} />
+            <Textarea placeholder="Кратко сформулируйте суть проекта: тип объекта, для кого он и какое общее впечатление должен производить (без детальных пожеланий — они будут ниже)…" className="min-h-[100px]" value={form.rooms_description} onChange={(event) => set("rooms_description", event.target.value)} />
           </div>
 
           <div className="space-y-4 rounded-lg border border-border bg-card p-5">

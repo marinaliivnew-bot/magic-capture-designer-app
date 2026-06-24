@@ -515,7 +515,7 @@ const NewProject = () => {
               <p className="mt-1 text-xs text-muted-foreground">Нет ни плана, ни точных размеров — опишите словами, AI разберется.</p>
             </div>
             <Textarea
-              placeholder="Баня 10x6, внутри парилка, душевая, комната отдыха и тамбур..."
+              placeholder="Кратко сформулируйте суть проекта: тип объекта, для кого он и какое общее впечатление должен производить (без детальных пожеланий — они будут ниже)…"
               className="min-h-[100px]"
               value={form.rooms_description}
               onChange={(event) => set("rooms_description", event.target.value)}
