@@ -20,7 +20,7 @@ const ProjectHeader = ({ projectId, currentStep, title, projectName, children }:
             onClick={() => navigate("/")}
             className="font-display text-lg text-foreground hover:text-primary transition-colors duration-350 shrink-0"
           >
-            Brief → Concept
+            Magic Capture
           </button>
           <span className="text-muted-foreground text-[11px]">|</span>
           <span className="font-display text-xl flex-1 truncate">{title}</span>

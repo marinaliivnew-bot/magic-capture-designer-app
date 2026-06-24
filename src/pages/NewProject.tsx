@@ -382,6 +382,17 @@ const NewProject = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <header className="border-b border-border bg-background">
+        <div className="mx-auto max-w-2xl px-4 py-4">
+          <button
+            onClick={() => navigate("/")}
+            className="font-display text-xl text-foreground transition-colors duration-350 hover:text-primary"
+          >
+            Magic Capture
+          </button>
+        </div>
+      </header>
+
       <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
         <div className="mb-8 text-center">
           <h1 className="mb-2 text-3xl font-display text-foreground sm:text-4xl">Новый проект</h1>

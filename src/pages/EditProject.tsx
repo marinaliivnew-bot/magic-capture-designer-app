@@ -382,7 +382,13 @@ const EditProject = () => {
           <button onClick={() => navigate(`/project/${projectId}/brief`)} className="text-muted-foreground transition-colors duration-350 hover:text-foreground">
             <ArrowLeft className="h-5 w-5" strokeWidth={1.5} />
           </button>
-          <span className="flex-1 font-display text-xl">Редактирование проекта</span>
+          <button
+            onClick={() => navigate("/")}
+            className="font-display text-xl text-foreground transition-colors duration-350 hover:text-primary"
+          >
+            Magic Capture
+          </button>
+          <span className="flex-1 text-right font-display text-xl">Редактирование проекта</span>
         </div>
       </header>
 
