@@ -65,7 +65,7 @@ interface AnalysisDebug {
   }>;
 }
 
-const EXTRACTED_SOURCE_TEXT_BUDGET = 45_000;
+const EXTRACTED_SOURCE_TEXT_BUDGET = 20_000;
 const MAX_PDF_PAGES_FOR_FILE_INPUT = 80;
 const MAX_PDF_BYTES_FOR_FILE_INPUT = 10 * 1024 * 1024;
 
@@ -683,6 +683,12 @@ const DesignerProfilePage = () => {
     setAnalysisDebug(null);
 
     try {
+      // Save form fields before AI calls so data survives any failure
+      await upsertDesignerProfile({
+        ...profile,
+        style_refs: [...uploadedFiles.map(f => f.path), ...knowledgeFiles.map(f => f.path)],
+      });
+
       const portfolioDocumentFiles = uploadedFiles.filter(isTextExtractableFile);
       const sourceFiles = [
         ...portfolioDocumentFiles.map((file) => ({ file, source: "Портфолио" as const })),
@@ -756,21 +762,19 @@ ${sourceSummary}${extractedSourcesBlock}`;
       try {
         sourceDigest = await invokeProfileAnalysis(digestPrompt, baseContextPrompt, portfolioImageUrls, visualPdfFiles);
       } catch (pdfInputError) {
-        console.warn("PDF file input failed:", pdfInputError);
+        console.warn("PDF file input failed, retrying without PDF:", pdfInputError);
         const pdfErrorMessage = pdfInputError instanceof Error ? pdfInputError.message : String(pdfInputError);
         const contextLimitExceeded = /context window|exceeds the context/i.test(pdfErrorMessage);
-        const userMessage = contextLimitExceeded
-          ? `PDF слишком большой для анализа целиком. Разбейте его на главы до ${MAX_PDF_PAGES_FOR_FILE_INPUT} страниц или загрузите DOCX/TXT.`
-          : "PDF не удалось передать в AI. Попробуйте сохранить его заново или загрузить DOCX/TXT.";
+        const warningMessage = contextLimitExceeded
+          ? `PDF слишком большой для передачи целиком — анализ выполнен на основе текста и изображений. Разбейте файл на главы до ${MAX_PDF_PAGES_FOR_FILE_INPUT} страниц или загрузите DOCX/TXT.`
+          : "PDF-файл без текстового слоя не удалось передать в AI — анализ выполнен на основе текста и изображений.";
         setAnalysisDebug((prev) => prev ? ({
           ...prev,
           pdfFilesSentToVision: 0,
-          warnings: [
-            ...prev.warnings,
-            `${userMessage} Анализ остановлен, чтобы не показывать неполный результат как полноценный.`,
-          ],
+          warnings: [...prev.warnings, warningMessage],
         }) : prev);
-        throw new Error(userMessage);
+        // Retry without PDF — text budget (45 000 chars) and images are sufficient
+        sourceDigest = await invokeProfileAnalysis(digestPrompt, baseContextPrompt, portfolioImageUrls);
       }
       const baseUserPrompt = `${baseContextPrompt}
 
@@ -788,10 +792,8 @@ ${sourceDigest}`;
 
 Напиши "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ" — ровно 15 конкретных пунктов-действий. Каждый с новой строки, без нумерации. Это должен быть операционный стандарт, а не описание стиля: формулируй через действия "В брифе буду проверять...", "В concept-board зафиксирую...", "Из референсов исключу...", "При конфликте клиента с профилем предложу...", "В генерации борда укажу...". По 3 пункта на шкалу: температура (цвета), строгость (компоновка), фактурность (материалы), цветность (палитра), стиль (направленность). Опирай действия на SOURCE DIGEST, профиль, извлечённые документы и видимые изображения портфолио; избегай универсальных советов, которые подошли бы любому дизайнеру. Не пиши "Хочу уточнить" и не задавай вопросы.`;
 
-      let [text1, text2] = await Promise.all([
-        invokeProfileAnalysis(promptBlock1, baseUserPrompt, portfolioImageUrls),
-        invokeProfileAnalysis(promptBlock2, baseUserPrompt, portfolioImageUrls),
-      ]);
+      let text1 = await invokeProfileAnalysis(promptBlock1, baseUserPrompt, portfolioImageUrls);
+      let text2 = await invokeProfileAnalysis(promptBlock2, baseUserPrompt, portfolioImageUrls);
       text1 = formatAnalysisBlock('ЧТО Я ВИЖУ', text1);
       text2 = formatAnalysisBlock('КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', text2);
 
@@ -881,7 +883,11 @@ ${sourceDigest}`;
 
       toast.success("Анализ сохранён");
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Ошибка анализа профиля";
+      const raw = e instanceof Error ? e.message : String(e);
+      const is429 = /429|rate limit|too many requests/i.test(raw);
+      const message = is429
+        ? "Превышен лимит AI-запросов. Подождите 1 минуту и попробуйте снова, или уменьшите количество загруженных файлов."
+        : raw || "Ошибка анализа профиля";
       toast.error(message);
       console.error(e);
     } finally {
