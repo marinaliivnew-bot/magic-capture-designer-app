@@ -117,7 +117,7 @@ serve(async (req) => {
           model: "gpt-4o",
           instructions: systemPrompt,
           input: [{ role: "user", content }],
-          max_output_tokens: 16000,
+          max_output_tokens: 2500,
           temperature: 0.7,
         }),
       });
@@ -169,7 +169,7 @@ serve(async (req) => {
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent.length === 1 ? userContent[0].text : userContent },
         ],
-        max_tokens: 16000,
+        max_tokens: 2500,
         temperature: 0.7,
       }),
     });
