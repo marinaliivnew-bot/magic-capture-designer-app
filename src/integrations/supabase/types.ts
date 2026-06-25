@@ -18,24 +18,30 @@ export type Database = {
         Row: {
           block_type: string
           caption: string | null
+          caption_source: string
           created_at: string
           id: string
+          original_ai_caption: string | null
           project_id: string
           sort_order: number
         }
         Insert: {
           block_type: string
           caption?: string | null
+          caption_source?: string
           created_at?: string
           id?: string
+          original_ai_caption?: string | null
           project_id: string
           sort_order?: number
         }
         Update: {
           block_type?: string
           caption?: string | null
+          caption_source?: string
           created_at?: string
           id?: string
+          original_ai_caption?: string | null
           project_id?: string
           sort_order?: number
         }
@@ -161,7 +167,9 @@ export type Database = {
           evidence: string | null
           id: string
           impact: string | null
+          original_ai: Json | null
           project_id: string
+          revision_source: string
           suggestion: string | null
           title: string
           type: string
@@ -171,7 +179,9 @@ export type Database = {
           evidence?: string | null
           id?: string
           impact?: string | null
+          original_ai?: Json | null
           project_id: string
+          revision_source?: string
           suggestion?: string | null
           title: string
           type: string
@@ -181,7 +191,9 @@ export type Database = {
           evidence?: string | null
           id?: string
           impact?: string | null
+          original_ai?: Json | null
           project_id?: string
+          revision_source?: string
           suggestion?: string | null
           title?: string
           type?: string
@@ -241,8 +253,10 @@ export type Database = {
           asked: boolean
           created_at: string
           id: string
+          original_ai: Json | null
           priority: string
           project_id: string
+          revision_source: string
           text: string
           unlocks: string | null
         }
@@ -251,8 +265,10 @@ export type Database = {
           asked?: boolean
           created_at?: string
           id?: string
+          original_ai?: Json | null
           priority?: string
           project_id: string
+          revision_source?: string
           text: string
           unlocks?: string | null
         }
@@ -261,8 +277,10 @@ export type Database = {
           asked?: boolean
           created_at?: string
           id?: string
+          original_ai?: Json | null
           priority?: string
           project_id?: string
+          revision_source?: string
           text?: string
           unlocks?: string | null
         }

@@ -4,16 +4,24 @@ import { cn } from "@/lib/utils";
 import {
   calculateBudget,
   type BriefBudgetInput,
+  type BudgetRegion,
   type BudgetSegment,
   type ProjectBudgetInput,
   type RoomBudgetInput,
 } from "@/lib/budget-calculator";
+import { loadBudgetSettings, saveBudgetSettings } from "@/lib/budget-settings";
 import { ROOM_TYPES } from "@/lib/constants";
 
 const SEGMENT_CONFIG: Record<BudgetSegment, { label: string; hint: string }> = {
   economy: { label: "Эконом", hint: "масс-маркет" },
   middle:  { label: "Средний", hint: "европейский" },
   premium: { label: "Премиум", hint: "натуральные" },
+};
+
+const REGION_CONFIG: Record<BudgetRegion, { label: string; hint: string }> = {
+  regions: { label: "Регионы", hint: "×1.00" },
+  moscow: { label: "Москва", hint: "×1.18" },
+  custom: { label: "Ручной", hint: "по ставкам" },
 };
 
 const ROOM_TYPE_LABELS = Object.fromEntries(ROOM_TYPES.map(r => [r.value, r.label]));
@@ -30,13 +38,37 @@ interface BudgetPanelProps {
 }
 
 export default function BudgetPanel({ brief, rooms, project, className }: BudgetPanelProps) {
-  const [manualSegment, setManualSegment] = useState<BudgetSegment | null>(null);
+  const projectId = project.id;
+  const savedSettings = useMemo(() => loadBudgetSettings(projectId), [projectId]);
+  const [manualSegment, setManualSegment] = useState<BudgetSegment | null>(savedSettings.segment || null);
+  const [region, setRegion] = useState<BudgetRegion>(savedSettings.region || "regions");
+  const [ratePercent, setRatePercent] = useState(Math.round(((savedSettings.manualRateMultiplier || 1) - 1) * 100));
   const [expanded, setExpanded] = useState(false);
+  const manualRateMultiplier = Math.max(0.5, Math.min(2, 1 + ratePercent / 100));
 
   const result = useMemo(
-    () => calculateBudget(brief, rooms, project, manualSegment ?? undefined),
-    [brief, rooms, project, manualSegment],
+    () => calculateBudget(brief, rooms, project, {
+      segment: manualSegment ?? undefined,
+      region,
+      manualRateMultiplier,
+    }),
+    [brief, rooms, project, manualSegment, region, manualRateMultiplier],
   );
+
+  const persistSettings = (next: {
+    segment?: BudgetSegment | null;
+    region?: BudgetRegion;
+    ratePercent?: number;
+  }) => {
+    const nextSegment = next.segment === undefined ? manualSegment : next.segment;
+    const nextRegion = next.region || region;
+    const nextRatePercent = next.ratePercent === undefined ? ratePercent : next.ratePercent;
+    saveBudgetSettings(projectId, {
+      segment: nextSegment || undefined,
+      region: nextRegion,
+      manualRateMultiplier: Math.max(0.5, Math.min(2, 1 + nextRatePercent / 100)),
+    });
+  };
 
   const hasBudget = result.budgetLimit !== null;
   const hasEstimate = result.totalEstimate > 0;
@@ -61,13 +93,18 @@ export default function BudgetPanel({ brief, rooms, project, className }: Budget
             <h3 className="label-style text-foreground">Предварительный расчёт</h3>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Площади × средние ставки по сегменту. Без учёта работ и проектирования.
+            Ориентир по комплектации. Не смета подрядчика.
           </p>
         </div>
         {manualSegment !== null && (
           <button
             type="button"
-            onClick={() => setManualSegment(null)}
+            onClick={() => {
+              setManualSegment(null);
+              setRegion("regions");
+              setRatePercent(0);
+              saveBudgetSettings(projectId, { region: "regions", manualRateMultiplier: 1 });
+            }}
             className="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
           >
             Сбросить
@@ -82,7 +119,10 @@ export default function BudgetPanel({ brief, rooms, project, className }: Budget
             <button
               key={key}
               type="button"
-              onClick={() => setManualSegment(key)}
+              onClick={() => {
+                setManualSegment(key);
+                persistSettings({ segment: key });
+              }}
               className={cn(
                 "rounded border px-3 py-2.5 text-center transition-colors",
                 activeSegment === key
@@ -106,6 +146,51 @@ export default function BudgetPanel({ brief, rooms, project, className }: Budget
         )}
       </div>
 
+      <div className="mb-5 grid gap-3 sm:grid-cols-[1fr_140px]">
+        <div className="grid grid-cols-3 gap-2">
+          {(Object.entries(REGION_CONFIG) as [BudgetRegion, { label: string; hint: string }][]).map(
+            ([key, cfg]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setRegion(key);
+                  persistSettings({ region: key });
+                }}
+                className={cn(
+                  "rounded border px-3 py-2.5 text-center transition-colors",
+                  region === key
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground",
+                )}
+              >
+                <p className="text-xs font-medium">{cfg.label}</p>
+                <p className={cn("mt-0.5 text-[10px]", region === key ? "opacity-60" : "opacity-50")}>
+                  {cfg.hint}
+                </p>
+              </button>
+            ),
+          )}
+        </div>
+        <label className="block">
+          <span className="mb-1 block text-[11px] text-muted-foreground">Коррекция ставок, %</span>
+          <input
+            type="number"
+            value={ratePercent}
+            min={-50}
+            max={100}
+            step={5}
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              const safeNext = Number.isFinite(next) ? next : 0;
+              setRatePercent(safeNext);
+              persistSettings({ ratePercent: safeNext });
+            }}
+            className="h-10 w-full rounded border border-border bg-background px-3 text-sm text-foreground"
+          />
+        </label>
+      </div>
+
       {/* Totals row */}
       {hasEstimate ? (
         <div className="mb-5 space-y-2.5">
@@ -117,7 +202,9 @@ export default function BudgetPanel({ brief, rooms, project, className }: Budget
                 result.overBudget ? "text-destructive" : "text-foreground",
               )}
             >
-              {fmtRub(result.totalEstimate)}
+              {result.estimateRange
+                ? `${fmtRub(result.estimateRange.min)} – ${fmtRub(result.estimateRange.max)}`
+                : fmtRub(result.totalEstimate)}
             </span>
           </div>
 
@@ -194,6 +281,46 @@ export default function BudgetPanel({ brief, rooms, project, className }: Budget
           ))}
         </div>
       )}
+
+      {/* Methodology */}
+      <div className="mb-4 border-t border-border pt-4">
+        <p className="mb-2 text-xs font-medium text-foreground">Методика расчета</p>
+        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+          <div>
+            <p>Сегмент: <span className="text-foreground">{SEGMENT_CONFIG[result.segment].label}</span></p>
+            <p>Регион: <span className="text-foreground">{REGION_CONFIG[result.region].label}</span></p>
+            <p>Коэффициент: <span className="text-foreground">×{(result.regionCoefficient * result.manualRateMultiplier).toFixed(2)}</span></p>
+            <p>Версия: <span className="text-foreground">{result.methodologyVersion}</span></p>
+            <p>Дата: <span className="text-foreground">{result.methodologyDate}</span></p>
+          </div>
+          <div>
+            {result.rateRows.map((row) => (
+              <p key={row.label}>
+                {row.label}:{" "}
+                <span className="text-foreground">
+                  {typeof row.value === "number" ? fmtRub(row.value) : row.value}
+                </span>
+              </p>
+            ))}
+          </div>
+        </div>
+        {expanded && (
+          <div className="mt-3 grid gap-3 text-xs text-muted-foreground sm:grid-cols-3">
+            <div>
+              <p className="mb-1 font-medium text-foreground">Допущения</p>
+              {result.assumptions.map((item) => <p key={item}>{item}</p>)}
+            </div>
+            <div>
+              <p className="mb-1 font-medium text-foreground">Входит</p>
+              {result.includes.map((item) => <p key={item}>{item}</p>)}
+            </div>
+            <div>
+              <p className="mb-1 font-medium text-foreground">Не входит</p>
+              {result.excludes.map((item) => <p key={item}>{item}</p>)}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Room breakdown (expandable) */}
       {result.roomEstimates.length > 0 && (

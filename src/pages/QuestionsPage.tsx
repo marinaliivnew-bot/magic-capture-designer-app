@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getIssues, getQuestions, updateQuestion, getProject, getBrief, analyzeBrief, getBoardBlocks, upsertBrief } from "@/lib/api";
+import { getIssues, getQuestions, updateIssue, updateQuestion, getProject, getBrief, analyzeBrief, getBoardBlocks, upsertBrief } from "@/lib/api";
 import { getRooms } from "@/lib/rooms";
 import { PRIORITY_CONFIG, BRIEF_SECTIONS, ROOM_TYPES } from "@/lib/constants";
 import { generateFullPDF } from "@/lib/pdf-export";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Loader2, AlertTriangle, HelpCircle, ArrowRight, ArrowLeft, Sparkles, RotateCcw, Download, Check } from "lucide-react";
 
@@ -27,6 +28,8 @@ const QuestionsPage = () => {
   const [answersApplied, setAnswersApplied] = useState(false);
   const [savingAnswer, setSavingAnswer] = useState<string | null>(null);
   const [savedAnswer, setSavedAnswer] = useState<string | null>(null);
+  const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
+  const [savingIssueId, setSavingIssueId] = useState<string | null>(null);
   const savedTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -90,6 +93,40 @@ const QuestionsPage = () => {
       toast.error("Ошибка сохранения");
     } finally {
       setSavingAnswer(null);
+    }
+  };
+
+  const handleIssueFieldChange = (issueId: string, field: "title" | "evidence" | "impact" | "suggestion", value: string) => {
+    setIssues((prev) =>
+      prev.map((issue) => (issue.id === issueId ? { ...issue, [field]: value } : issue))
+    );
+  };
+
+  const handleSaveIssue = async (issue: any) => {
+    setSavingIssueId(issue.id);
+    const originalAi = issue.original_ai || {
+      title: issue.title,
+      evidence: issue.evidence,
+      impact: issue.impact,
+      suggestion: issue.suggestion,
+    };
+
+    try {
+      const saved = await updateIssue(issue.id, {
+        title: issue.title,
+        evidence: issue.evidence || null,
+        impact: issue.impact || null,
+        suggestion: issue.suggestion || null,
+        original_ai: originalAi,
+        revision_source: "manual",
+      });
+      setIssues((prev) => prev.map((item) => (item.id === issue.id ? saved : item)));
+      setEditingIssueId(null);
+      toast.success("Формулировка сохранена как ручная правка");
+    } catch {
+      toast.error("Ошибка сохранения формулировки");
+    } finally {
+      setSavingIssueId(null);
     }
   };
 
@@ -226,19 +263,97 @@ const QuestionsPage = () => {
             <div className="divide-y divide-border">
               {issues.filter(i => i.type === 'contradiction').map((issue) => (
                 <div key={issue.id} className="py-6 border-l-[3px] border-l-[hsl(var(--color-critical))] pl-6">
-                  <h3 className="text-[hsl(var(--color-critical))]">{issue.title}</h3>
-                  {issue.evidence && (
-                    <p className="mt-2 caption-style italic">
-                      «{issue.evidence}»
-                    </p>
-                  )}
-                  {issue.impact && (
-                    <p className="mt-2 text-[15px] text-foreground font-light">{issue.impact}</p>
-                  )}
-                  {issue.suggestion && (
-                    <p className="mt-2 text-[15px] text-primary font-light">
-                      {issue.suggestion}
-                    </p>
+                  {editingIssueId === issue.id ? (
+                    <div className="space-y-3">
+                      <Input
+                        value={issue.title || ""}
+                        onChange={(e) => handleIssueFieldChange(issue.id, "title", e.target.value)}
+                        placeholder="Заголовок конфликта"
+                      />
+                      <Textarea
+                        value={issue.evidence || ""}
+                        onChange={(e) => handleIssueFieldChange(issue.id, "evidence", e.target.value)}
+                        placeholder="Источник / цитата"
+                      />
+                      <Textarea
+                        value={issue.impact || ""}
+                        onChange={(e) => handleIssueFieldChange(issue.id, "impact", e.target.value)}
+                        placeholder="Влияние на проект"
+                      />
+                      <Textarea
+                        value={issue.suggestion || ""}
+                        onChange={(e) => handleIssueFieldChange(issue.id, "suggestion", e.target.value)}
+                        placeholder="Решение / допущение"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveIssue(issue)}
+                          disabled={savingIssueId === issue.id}
+                        >
+                          {savingIssueId === issue.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Сохранить ручную правку
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingIssueId(null)}
+                        >
+                          Отмена
+                        </Button>
+                      </div>
+                      {issue.original_ai && (
+                        <p className="caption-style">
+                          Исходная AI-формулировка сохранена в истории.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h3 className="text-[hsl(var(--color-critical))]">{issue.title}</h3>
+                        {issue.revision_source === "manual" && (
+                          <Badge variant="outline">manual</Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setIssues((prev) =>
+                              prev.map((item) =>
+                                item.id === issue.id && !item.original_ai
+                                  ? {
+                                      ...item,
+                                      original_ai: {
+                                        title: item.title,
+                                        evidence: item.evidence,
+                                        impact: item.impact,
+                                        suggestion: item.suggestion,
+                                      },
+                                    }
+                                  : item
+                              )
+                            );
+                            setEditingIssueId(issue.id);
+                          }}
+                        >
+                          Редактировать
+                        </Button>
+                      </div>
+                      {issue.evidence && (
+                        <p className="mt-2 caption-style italic">
+                          «{issue.evidence}»
+                        </p>
+                      )}
+                      {issue.impact && (
+                        <p className="mt-2 text-[15px] text-foreground font-light">{issue.impact}</p>
+                      )}
+                      {issue.suggestion && (
+                        <p className="mt-2 text-[15px] text-primary font-light">
+                          {issue.suggestion}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               ))}

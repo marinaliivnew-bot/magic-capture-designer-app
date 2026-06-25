@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getSessionId } from "./session";
 import { buildStructuredUserRefs, serializeUserRefs, type UserRef } from "./user-refs";
+import { getStyleFormula } from "./concept-rationale";
+import { normalizeMaterialConflictIssue } from "./material-language";
 
 // Projects
 export async function createProject(data: {
@@ -153,10 +155,29 @@ export async function saveIssues(projectId: string, issues: Array<{
   // Delete old issues first
   await supabase.from("issues").delete().eq("project_id", projectId);
   if (issues.length === 0) return [];
+  const normalizedIssues = issues.map(normalizeMaterialConflictIssue);
   const { data, error } = await supabase
     .from("issues")
-    .insert(issues.map(i => ({ ...i, project_id: projectId })))
+    .insert(normalizedIssues.map(i => ({ ...i, project_id: projectId })))
     .select();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateIssue(id: string, fields: {
+  title?: string;
+  evidence?: string | null;
+  impact?: string | null;
+  suggestion?: string | null;
+  original_ai?: Record<string, any> | null;
+  revision_source?: "ai" | "manual";
+}) {
+  const { data, error } = await supabase
+    .from("issues")
+    .update(fields)
+    .eq("id", id)
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
@@ -187,7 +208,7 @@ export async function saveQuestions(projectId: string, questions: Array<{
   return data;
 }
 
-export async function updateQuestion(id: string, fields: { asked?: boolean; answer?: string }) {
+export async function updateQuestion(id: string, fields: { asked?: boolean; answer?: string; text?: string; unlocks?: string; original_ai?: Record<string, any> | null; revision_source?: "ai" | "manual" }) {
   const { data, error } = await supabase
     .from("questions")
     .update(fields)
@@ -244,7 +265,7 @@ export async function saveBoardBlocks(projectId: string, blocks: Array<{
   }
 }
 
-export async function updateBoardBlock(blockId: string, fields: { caption?: string }) {
+export async function updateBoardBlock(blockId: string, fields: { caption?: string; original_ai_caption?: string | null; caption_source?: "ai" | "manual" }) {
   const { error } = await supabase
     .from("board_blocks")
     .update(fields)
@@ -334,6 +355,10 @@ export async function generateBoard(projectId: string, briefText: string, projec
   const userRefsStructured = (brief as any)?.user_refs_structured || [];
   const clientTasteResult = (brief as any)?.client_taste_result ?? null;
   const designerProfileText = formatDesignerProfileForAI(designerProfile);
+  const styleFormula = getStyleFormula(brief);
+  const styleFormulaText = styleFormula.terms.length > 0
+    ? `\n\n## ЕДИНАЯ СТИЛЕВАЯ ФОРМУЛА\n${styleFormula.phrase}\nКлючевые признаки для всех search_query: ${styleFormula.terms.join(", ")}`
+    : "";
 
   const resp = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-board`,
@@ -343,7 +368,14 @@ export async function generateBoard(projectId: string, briefText: string, projec
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify({ briefText, projectContext, userRefs, designerProfileText, userRefsStructured, clientTasteResult }),
+      body: JSON.stringify({
+        briefText,
+        projectContext: `${projectContext || ""}${styleFormulaText}`,
+        userRefs,
+        designerProfileText,
+        userRefsStructured,
+        clientTasteResult,
+      }),
     }
   );
   if (!resp.ok) {
@@ -356,7 +388,8 @@ export async function generateBoard(projectId: string, briefText: string, projec
   const allQueries: Record<string, string> = {};
   (result.blocks || []).forEach((b: any, i: number) => {
     (Array.isArray(b.search_queries) ? b.search_queries : []).forEach((q: string, j: number) => {
-      allQueries[`board_${i}_${j}`] = q;
+      const formulaPrefix = styleFormula.terms.slice(0, 5).join(" ");
+      allQueries[`board_${i}_${j}`] = formulaPrefix ? `${formulaPrefix} ${q}` : q;
     });
   });
 
