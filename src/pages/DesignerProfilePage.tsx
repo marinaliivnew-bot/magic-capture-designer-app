@@ -804,41 +804,29 @@ ${sourceDigest}`;
         retried = true;
         toast.info("AI вернул слишком короткий анализ, пробую расширить результат");
 
-        const retryTasks: Promise<string>[] = [];
-        const retryTargets: Array<"whatISee" | "howIApply"> = [];
         const retryQualityOnly = validation.sentenceCount >= 10 && validation.actionCount >= 10 && validation.qualityIssues.length > 0;
 
         if (validation.sentenceCount < 10 || retryQualityOnly) {
-          retryTargets.push("whatISee");
-          retryTasks.push(invokeProfileAnalysis(
+          const retryText1 = await invokeProfileAnalysis(
             `${promptBlock1}
 
 Предыдущий ответ был слишком коротким или слишком общим. Перепиши секцию заново: минимум 10, лучше 15 развёрнутых предложений. Не сжимай мысли в один абзац, не обобщай, опирайся на SOURCE DIGEST, все доступные поля профиля, базу знаний и портфолио. Обязательно назови материалы, палитру, композиционные принципы, клиентский процесс и прочитанные источники, если они действительно прочитаны. Верни только секцию "ЧТО Я ВИЖУ".`,
             baseUserPrompt,
             portfolioImageUrls,
-          ));
+          );
+          text1 = formatAnalysisBlock('ЧТО Я ВИЖУ', retryText1);
         }
 
         if (validation.actionCount < 10 || retryQualityOnly) {
-          retryTargets.push("howIApply");
-          retryTasks.push(invokeProfileAnalysis(
+          const retryText2 = await invokeProfileAnalysis(
             `${promptBlock2}
 
 Предыдущий ответ был слишком коротким, слишком общим или плохо разделён на пункты. Перепиши секцию заново: верни ровно 15 строк, каждая строка начинается с "- " и содержит одно конкретное действие длиной минимум 35 символов. Обязательно используй форматы действий: "В брифе буду проверять...", "В concept-board зафиксирую...", "Из референсов исключу...", "При конфликте клиента с профилем предложу...", "В генерации борда укажу...". Не объединяй пункты в абзац. Верни только секцию "КАК Я БУДУ ЭТО ПРИМЕНЯТЬ".`,
             baseUserPrompt,
             portfolioImageUrls,
-          ));
+          );
+          text2 = formatAnalysisBlock('КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', retryText2);
         }
-
-        const retryResults = await Promise.all(retryTasks);
-        retryResults.forEach((retryText, idx) => {
-          if (retryTargets[idx] === "whatISee") {
-            text1 = formatAnalysisBlock('ЧТО Я ВИЖУ', retryText);
-          }
-          if (retryTargets[idx] === "howIApply") {
-            text2 = formatAnalysisBlock('КАК Я БУДУ ЭТО ПРИМЕНЯТЬ', retryText);
-          }
-        });
 
         validation = validateProfileAnalysis(text1, text2, extractedSources);
       }
@@ -1129,7 +1117,7 @@ ${sourceDigest}`;
             )}
 
             {analysisDebug && (
-              <details className="bg-white border border-[#E5E5E5] rounded-xl p-5 shadow-sm space-y-4" open={analysisDebug.warnings.length > 0}>
+              <details className="bg-white border border-[#E5E5E5] rounded-xl p-5 shadow-sm space-y-4">
                 <summary className="cursor-pointer list-none">
                   <div className="flex items-start justify-between gap-3">
                     <div>
