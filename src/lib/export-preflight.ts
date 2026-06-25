@@ -329,10 +329,10 @@ export function runExportPreflight(data: PreflightData): PreflightResult {
   }
 
   const styleConsistency = getStyleConsistency(brief, blocks);
-  styleConsistency.conflicts.forEach((conflict) => {
+  styleConsistency.conflicts.forEach((conflict, index) => {
     issues.push(
       issue({
-        id: `style-conflict-${conflict.blockType}`,
+        id: `style-conflict-${conflict.blockType}-${index}`,
         severity: "P1",
         title: `Стилистический конфликт: ${getBlockLabel(conflict.blockType)}`,
         detail: `${conflict.reason} Проверьте стилевую формулу и мастер-референс на concept board.`,

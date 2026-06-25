@@ -142,7 +142,9 @@ describe("runExportPreflight", () => {
     });
 
     expect(result.status).toBe("fail");
-    expect(result.blockingIssues.map((item) => item.id)).toContain("style-conflict-materials");
+    expect(
+      result.blockingIssues.some((item) => item.id.startsWith("style-conflict-materials"))
+    ).toBe(true);
   });
 
   it("accepts calculated budget methodology when rooms have area", () => {
