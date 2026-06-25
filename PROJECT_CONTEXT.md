@@ -1,7 +1,7 @@
 # Magic Capture — Контекст проекта
 
 > Единый источник правды для Claude Code. Перед любой доработкой сверяйся с ним.
-> Обновлён: 7 мая 2026
+> Обновлён: 17 июня 2026 (сверено напрямую с кодом репозитория)
 
 ---
 
@@ -23,17 +23,17 @@
 |------|-----------|
 | Frontend | React + Tailwind CSS |
 | Backend / DB | Supabase (PostgreSQL + Edge Functions + Storage) |
-| AI (текст) | Anthropic API: Claude Sonnet, max_tokens: 4096 |
-| AI (изображения) | Unsplash API → fallback Together AI FLUX → заглушка |
+| AI (текст и анализ) | OpenAI API: gpt-4o (основная модель), gpt-4o-mini (только `analyze-plan`) — единственный провайдер, все вызовы через Supabase Edge Functions, прямых вызовов из браузера нет |
+| AI (изображения) | Unsplash API. Fallback — упрощение поискового запроса (общее слово + «interior»), не другой провайдер. ⚠️ Ключ также используется напрямую из браузера в `StyleNarrowingPage.tsx` — открытая уязвимость H-1 |
 | PDF export | react-pdf / @react-pdf/renderer |
 | Деплой | Cloudflare Pages (GitHub autodeploy) |
 | Репозиторий | github.com/marinaliivnew-bot/magic-capture-designer-app |
 | Среда разработки | VS Code + Claude Code |
 | Скиллы | .claude/skills/ (frontend-design, interior-ergonomics, canvas-design, skill-creator) |
 
-**Env-переменные:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ANTHROPIC_KEY`, `VITE_UNSPLASH_KEY`
+**Env-переменные:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_UNSPLASH_KEY`
 
-**Supabase Edge Functions:** `analyze-brief`, `generate-board`
+**Supabase Edge Functions:** `analyze-brief`, `analyze-client-taste`, `analyze-plan`, `analyze-profile`, `apply-answers`, `estimate-furniture`, `extract-text`, `fetch-style-images`, `generate-board`, `generate-furniture-plan`, `get-public-project`, `parse-rooms`, `resolve-style`
 Деплой: `npx supabase functions deploy <name> --project-ref iyqfstkhpsalqxzhousy`
 
 ---
@@ -66,9 +66,23 @@ project_id uuid, block_type text, caption text, sort_order int
 -- board_images
 block_id uuid, url text, source_type text, source_url text,
 attribution text, note text
+
+-- rooms (отдельные помещения внутри проекта)
+id uuid PRIMARY KEY, project_id uuid REFERENCES projects(id) ON DELETE CASCADE,
+name text NOT NULL, room_type text DEFAULT 'other',
+dimensions_text text, plan_url text, sort_order int, created_at timestamptz
+
+-- designer_profile
+id uuid PRIMARY KEY, session_id text NOT NULL,
+style_description text, style_refs jsonb DEFAULT '[]',
+hard_constraints jsonb DEFAULT '{}',  -- сюда же кладутся слайдеры визуального языка и пути загруженных файлов
+ergonomics_rules jsonb DEFAULT '{}', custom_ergonomics_text text,
+created_at timestamptz, updated_at timestamptz
 ```
 
 ON DELETE CASCADE на всех дочерних таблицах → кнопка «Удалить проект» работает без доп. логики.
+
+**Безопасность:** Row Level Security (RLS) включён на всех 8 таблицах выше, доступ ограничен по `session_id` через заголовок `x-session-id`. Полную и актуальную картину политик и истории миграций смотреть в `ADR.md` и напрямую в `supabase/migrations/` — список миграций растёт быстро, фиксировать конкретное число здесь нет смысла.
 
 ---
 
@@ -103,7 +117,7 @@ ON DELETE CASCADE на всех дочерних таблицах → кнопк
 - **«Габариты мебели и эргономика»** — мебель с учётом реальных размеров помещения
 - **«Освещение»** — сценарии света
 
-Дизайнерские комментарии (3 компонента): Что это → Зачем здесь → Тех. параметр. Данные комнат + размеры передаются в generate-board, борд структурируется по помещениям.
+Дизайнерские комментарии (3 компонента): Что это → Зачем здесь → Тех. параметр. Данные комнат, размеры, ответы клиента на уточняющие вопросы и результат Style Narrowing передаются в `generate-board`; борд структурируется по помещениям.
 
 ### 4.5 Валидатор эргономики
 
@@ -113,9 +127,23 @@ ON DELETE CASCADE на всех дочерних таблицах → кнопк
 
 Алгоритм: категоризация материалов по сегментам → извлечение площадей из плана → расчёт (площадь × цена сегмента) → сверка с лимитом → предупреждение при превышении. Динамический пересчёт при замене материала/мебели.
 
+> **Примечание:** разделы 4.4 (габариты мебели), 4.5 (валидатор) и 4.6 (бюджет) реализованы как единый экран `FurniturePlanPage`: каталог мебели по ценовым сегментам + RAL-палитра цветов + валидация проходов + расчёт бюджета + модуль закупки (`ProcurementModal`).
+
 ### 4.7 PDF-экспорт
 
 Разделы: бриф (8 секций), критерии успеха, табу, бюджет и ограничения, concept board с подписями, блок согласования (клиент + дизайнер + дата + подпись). Версионность: Draft → Готов к согласованию → Утверждённая версия.
+
+### 4.8 Профиль дизайнера
+
+Дизайнер задаёт: имя, визуальный язык через 5 слайдеров (Холодно↔Тепло, Строго↔Свободно, Просто↔Фактурно, Монохром↔Цветно, Классика↔Авангард), стандарты/ограничения (свободный текст), загружает файлы в две зоны — «Портфолио» и «База знаний» (PDF, изображения). Кнопка AI-анализа читает содержимое файлов (включая vision-анализ PDF, не просто имена файлов) и формирует профиль автоматически.
+
+### 4.9 Дашборд проектов
+
+Список всех проектов дизайнера с показателями: completeness_score, статус согласования (Draft / Locked / Approved), согласованные элементы, открытые конфликты по стилю, наличие готового борда. Режимы отображения: список / галерея, фильтр по статусу, закрепление важных проектов, шаринг, удаление.
+
+### 4.10 Публичная ссылка на проект
+
+Read-only страница для клиента по публичной ссылке — бриф и статус согласования (Draft / Locked / Approved), без прав на редактирование. Способ отправить проект клиенту на просмотр без захода в личный кабинет дизайнера.
 
 ---
 

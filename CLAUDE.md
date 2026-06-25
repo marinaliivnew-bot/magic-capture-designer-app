@@ -16,20 +16,19 @@ React + Tailwind · Supabase (PostgreSQL + Edge Functions) · Anthropic API (Cla
 |------|----------|
 | `PROJECT_CONTEXT.md` | Полная спецификация: модули, модель данных, workflow, язык интерфейса |
 | `ROADMAP_v3.md` | Что сделано ✅ + что дальше (блоки 5–6) |
+| `ADR.md` | Лог архитектурных решений — почему выбрали X, а не Y |
 
 **Перед задачей:** прочитай `PROJECT_CONTEXT.md` и `ROADMAP_v3.md`.
-
-| `ADR.md` | Лог архитектурных решений — почему выбрали X, а не Y |
 
 ## Структура проекта
 
 ```
 src/
-  pages/          — экраны (NewProject, BriefPage, StyleNarrowingPage, ConceptBoard)
+  pages/          — экраны (NewProject, BriefPage, StyleNarrowingPage, ConceptBoard, DesignerProfilePage)
   components/     — UI-компоненты (ColorChip, ConflictDetector, BudgetCalculator и др.)
   lib/            — утилиты (style-cards.ts, ergonomics, budget)
 supabase/
-  functions/      — Edge Functions (analyze-brief, generate-board)
+  functions/      — Edge Functions (analyze-brief, generate-board, analyze-profile)
 .claude/
   skills/         — скиллы (frontend-design, interior-ergonomics, canvas-design, skill-creator)
 ```
@@ -44,10 +43,10 @@ supabase/
 6. **Не трогай StyleNarrowingPage**, если задача касается BriefPage — это разные экраны.
 7. После выполнения задачи — ставь ✅ в `ROADMAP_v3.md`.
 8. После каждого раунда изменений:
-  - ✅ Проверить типы (types.ts)
-  - ✅ Задеплоить Edge Functions
-  - ✅ Применить миграции
-  - ✅ Протестировать flow от начала до конца
+   - ✅ Проверить типы (types.ts)
+   - ✅ Задеплоить Edge Functions
+   - ✅ Применить миграции
+   - ✅ Протестировать flow от начала до конца
 
 ## Пример стартовой фразы
 
@@ -55,3 +54,26 @@ supabase/
 Прочитай PROJECT_CONTEXT.md и ROADMAP_v3.md — это контекст проекта.
 Сегодня делаем: [задача 5.1 — Профиль дизайнера].
 ```
+
+---
+
+## Текущее состояние (обновляй перед каждой сессией)
+
+**Активный блок:** Block 5 — Personalization  
+**Последнее изменение:** _[дата] — [что сделали]_  
+**Известные проблемы:** _[перечисли или напиши "нет"]_  
+**Следующая задача:** _[одна фраза]_
+
+---
+
+## Инструкция для Codex (code review)
+
+Ты — независимый ревьюер. Claude Code уже написал код. Твоя задача:
+
+1. Найди логические ошибки и баги — не переписывай, только указывай.
+2. Проверь edge cases: пустой ввод, null, сетевые ошибки.
+3. Найди дублирование кода между файлами.
+4. Проверь, что промпты к Anthropic API возвращают ожидаемый формат.
+5. Отвечай списком: файл → строка → проблема → почему это баг.
+
+Не предлагай архитектурные изменения. Не переписывай. Только находи.
